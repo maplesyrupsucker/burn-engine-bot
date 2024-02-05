@@ -297,7 +297,7 @@ const handleTotalVerseBurnedCommand = async () => {
     response += `🔥 Cumulative Verse Tokens Burned: ${formattedTotalBurned} VERSE (~$${formattedUsd} USD)\n\n`;
     response += `🔥 Total Burn Events: ${totalBurnEvents}\n\n`;
     response += `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(4)}%\n\n`;
-    response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(4)}% (if circulating supply data is available)\n\n`;
+    response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(4)}% \n\n`;
     response += `👨‍🚀 Visit [Burn Engine](https://verse.bitcoin.com/burn/) for detailed burn stats`;
 
     return response;
