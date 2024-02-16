@@ -3,8 +3,8 @@ const Web3 = require("web3");
 const axios = require("axios");
 const { handleTelegramPost, handleTelegramCommand, notifyError } = require("./handlers/telegramHandler");
 const { handleSlackPost } = require("./handlers/slackHandler");
-const { handleFacebookPost } = require("./handlers/facebookHandler");
-const { handleDiscordPost } = require("./handlers/discordHandler");
+// const { handleFacebookPost } = require("./handlers/facebookHandler");
+// const { handleDiscordPost } = require("./handlers/discordHandler");
 const { handleTwitterPost } = require("./handlers/twitterHandler");
 
 // Web3 Setup
