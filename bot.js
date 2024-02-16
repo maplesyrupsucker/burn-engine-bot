@@ -1,7 +1,7 @@
 require("dotenv").config();
 const Web3 = require("web3");
 const axios = require("axios");
-const { handleTelegramPost, handleTelegramCommands, notifyError } = require("./handlers/telegramHandler");
+const { handleTelegramPost, notifyError } = require("./handlers/telegramHandler");
 const { handleSlackPost } = require("./handlers/slackHandler");
 // const { handleFacebookPost } = require("./handlers/facebookHandler");
 // const { handleDiscordPost } = require("./handlers/discordHandler");
@@ -257,7 +257,6 @@ async function initialize() {
     monitorEvents();
 
     // Initialize Telegram commands
-    handleTelegramCommands();
     setupTelegramCommands({
       verseTokenContract,
       fetchLastFiveBurns,
