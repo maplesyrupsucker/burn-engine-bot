@@ -48,12 +48,18 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
         const chatId = msg.chat.id;
         try {
             const response = await fetchLastFiveBurns();
-            bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
+            if (!response || response.trim() === "") {
+                throw new Error("No burn data available.");
+            }
+            await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
         } catch (error) {
-            notifyError(`Error in /burns command: ${error.message}`);
-            bot.sendMessage(chatId, "Sorry, there was an error processing your /burns command.");
+            console.error(`Error in /burns command: ${error.message}`);
+            await notifyError(`Error in /burns command: ${error.message}`);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your /burns command: " + error.message);
         }
     });
+    
+    
 
     bot.onText(/\/enginebalance/, async (msg) => {
         const chatId = msg.chat.id;
@@ -70,12 +76,17 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
         const chatId = msg.chat.id;
         try {
             const response = await getTotalBurnedResponse();
-            bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
+            if (!response || response.trim() === "") {
+                throw new Error("No total burned Verse data available.");
+            }
+            await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
         } catch (error) {
-            notifyError(`Error in /totalburned command: ${error.message}`);
-            bot.sendMessage(chatId, "Sorry, there was an error processing your /totalburned command.");
+            console.error(`Error in /totalverseburned command: ${error.message}`);
+            await notifyError(`Error in /totalverseburned command: ${error.message}`);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your /totalverseburned command: " + error.message);
         }
     });
+    
     // Add more command handlers as needed
 }
 
