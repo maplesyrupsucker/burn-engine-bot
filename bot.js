@@ -1,7 +1,7 @@
 require("dotenv").config();
 const Web3 = require("web3");
 const axios = require("axios");
-const { handleTelegramPost, notifyError } = require("./handlers/telegramHandler");
+const { handleTelegramPost, notifyError, setupTelegramCommands } = require("./handlers/telegramHandler");
 const { handleSlackPost } = require("./handlers/slackHandler");
 // const { handleFacebookPost } = require("./handlers/facebookHandler");
 // const { handleDiscordPost } = require("./handlers/discordHandler");
@@ -115,6 +115,43 @@ const handleTokensBurned = async (event) => {
   await postUpdate(message);
   await postUpdate(await getTotalBurnedResponse());
 };
+
+
+async function fetchLastFiveBurns() {
+  const burnEvent = "Transfer";
+  const nullAddress = "0x0000000000000000000000000000000000000000";
+  const latestBlock = await web3.eth.getBlockNumber();
+  const fromBlock = Math.max(latestBlock - 10000, 0); // Adjust block range as needed
+
+  const burnEvents = await verseTokenContract.getPastEvents(burnEvent, {
+      fromBlock: fromBlock,
+      toBlock: 'latest',
+      filter: { to: nullAddress }
+  });
+
+  // Process and format the last five burn events
+  const lastFiveBurns = burnEvents.slice(-5).map(event => {
+      const amountWei = event.returnValues.value;
+      const amountEth = web3.utils.fromWei(amountWei, 'ether');
+      return `🔥 Burned ${amountEth} VERSE in transaction [${event.transactionHash}](https://etherscan.io/tx/${event.transactionHash})`;
+  }).reverse(); // Reverse to show the most recent event first
+
+  return lastFiveBurns.join('\n\n');
+}
+
+
+async function fetchEngineBalance() {
+  await fetchVerseUsdRate();
+  const burnEngineAddress = "0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8"; // Burn engine address
+  const burnEngineBalanceWei = await verseTokenContract.methods.balanceOf(burnEngineAddress).call();
+  const burnEngineBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
+
+  const response = 
+    `🔥 Current Burn Engine Balance: ${burnEngineBalanceEth.toFixed(2)} VERSE (~$${(burnEngineBalanceEth * verseUsdRate).toFixed(2)} USD)\n` +
+    `🚀 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
+
+  return response;
+}
 
 
 async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
@@ -264,6 +301,7 @@ async function initialize() {
       handleTotalVerseBurnedCommand,
       notifyError
     });
+    
   } catch (e) {
     console.error(`Error during initialization: ${e.message}`);
     await notifyError("Error during initialization: " + e.message);

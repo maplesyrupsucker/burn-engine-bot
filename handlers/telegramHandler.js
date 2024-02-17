@@ -8,9 +8,10 @@ const myTelegramId = process.env.MY_TELEGRAM_ID; // Your Telegram User ID for re
 async function handleTelegramPost(message) {
     try {
         const chatIds = process.env.TELEGRAM_CHAT_IDS.split(",");
-        chatIds.forEach(async chatId => {
+        for (const chatId of chatIds) {
             await bot.sendMessage(chatId, message);
-        });
+        }
+        
     } catch (error) {
         console.error("Error posting to Telegram:", error);
         await notifyError(`Error in Telegram Post: ${error.message}`);
@@ -21,9 +22,9 @@ async function handleTelegramPost(message) {
 async function handleTelegramPostWithGIF(gifUrl) {
     try {
         const chatIds = process.env.TELEGRAM_CHAT_IDS.split(",");
-        chatIds.forEach(async chatId => {
+        for (const chatId of chatIds) {
             await bot.sendDocument(chatId, gifUrl);
-        });
+        }
     } catch (error) {
         console.error("Error posting GIF to Telegram:", error);
         await notifyError(`Error in Telegram GIF Post: ${error.message}`);
