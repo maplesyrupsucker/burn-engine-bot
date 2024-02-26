@@ -153,14 +153,13 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
     const totalBurnEvents = transferEventsToNull.length;
     const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
     const circulatingSupplyBurnedPercent = circulatingSupply
-      ? (totalBurnedEth / circulatingSupply) * 100
-      : 0; // Adjusted to 0 instead of null for consistency
+      ? ((totalBurnedEth / circulatingSupply) * 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      : "0.00"; // Adjusted for consistency and formatting
+    const totalBurnedUsd = totalBurnedEth * verseUsdRate;
 
     let response =
       `** Total VERSE Burned ** \n\n` +
-      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toFixed(
-        2
-      )} VERSE\n` +
+      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VERSE (~$${totalBurnedUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)\n` +
       `🔥 Total Burn Events: ${totalBurnEvents}\n` +
       `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(2)}%\n`;
 
@@ -245,14 +244,16 @@ async function fetchEngineBalance() {
     web3.utils.fromWei(burnEngineBalanceWei, "ether")
   );
 
+  const formattedVerseBalance = burnEngineBalanceEth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formattedUsdBalance = (burnEngineBalanceEth * verseUsdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
   const response =
-    `🔥 Current Burn Engine Balance: ${burnEngineBalanceEth.toFixed(
-      2
-    )} VERSE (~$${(burnEngineBalanceEth * verseUsdRate).toFixed(2)} USD)\n` +
+    `🔥 Current Burn Engine Balance: ${formattedVerseBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
     `🚀 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
 
   return response;
 }
+
 
 // Post Update Function
 async function postUpdate(message) {
