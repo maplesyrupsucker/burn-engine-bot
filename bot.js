@@ -266,6 +266,54 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
   }
 }
 
+async function fetchLastFiveBurns() {
+  console.log("Fetching the last five burns...");
+  try {
+    const burnEvent = "Transfer";
+    const nullAddress = "0x0000000000000000000000000000000000000000";
+    const startBlock = 16129240; // Block when Verse token was created
+
+    await fetchVerseUsdRate(); // Ensure USD rate is up-to-date
+
+    const burnEvents = await verseTokenContract.getPastEvents(burnEvent, {
+      fromBlock: startBlock,
+      toBlock: "latest",
+      filter: { to: nullAddress },
+    });
+
+    // Process and format the last five burn events
+    const lastFiveBurns = burnEvents
+      .slice(-5)
+      .map((event) => {
+        const amountWei = event.returnValues.value;
+        const amountEth = parseFloat(web3.utils.fromWei(amountWei, "ether"));
+        const burnDate = new Date(event.returnValues.timestamp * 1000)
+          .toISOString()
+          .split("T")[0]; // Convert Unix timestamp to date
+        const formattedAmountEth = amountEth.toLocaleString("en-US", {
+          maximumFractionDigits: 2,
+        });
+        const formattedAmountUsd = (amountEth * verseUsdRate).toLocaleString(
+          "en-US",
+          { maximumFractionDigits: 2 }
+        );
+
+        return `🔥 Burned ${formattedAmountEth} VERSE (~$${formattedAmountUsd} USD) on ${burnDate} in transaction: [View tx](https://etherscan.io/tx/${event.transactionHash})`;
+      })
+      .reverse(); // Reverse to show the most recent event first
+
+    if (lastFiveBurns.length === 0) {
+      return "No recent burn events found.";
+    }
+
+    console.log("Last five burns:", lastFiveBurns);
+    return lastFiveBurns.join("\n\n");
+  } catch (error) {
+    console.error("Error fetching last five burns:", error);
+    throw error; // Rethrow the error to be handled by the command handler
+  }
+}
+
 async function fetchEngineBalance() {
   await fetchVerseUsdRate();
   const burnEngineAddress = "0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8"; // Burn engine address
