@@ -120,6 +120,71 @@ function getRandomBurnMessage() {
   return burnMessages[randomIndex];
 }
 
+async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
+  try {
+    console.log("Fetching total Verse burned...");
+
+    const nullAddress = "0x0000000000000000000000000000000000000000";
+    const startBlock = 16129240; // Block when Verse token was created
+    const totalSupply = 210e9; // 210 billion VERSE
+    const circulatingSupply = await fetchCirculatingSupply();
+
+    console.log(
+      `Fetching Transfer events to null address from block ${startBlock}...`
+    );
+
+    const transferEventsToNull = await verseTokenContract.getPastEvents(
+      "Transfer",
+      {
+        fromBlock: startBlock,
+        toBlock: "latest",
+        filter: { to: nullAddress },
+      }
+    );
+
+    const totalBurnedWei = transferEventsToNull.reduce(
+      (sum, event) => sum + BigInt(event.returnValues.value),
+      BigInt(0)
+    );
+    const totalBurnedEth = web3.utils.fromWei(
+      totalBurnedWei.toString(),
+      "ether"
+    );
+    const totalBurnEvents = transferEventsToNull.length;
+    const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
+    const circulatingSupplyBurnedPercent = circulatingSupply
+      ? (totalBurnedEth / circulatingSupply) * 100
+      : null;
+
+    let response =
+      `** Total VERSE Burned ** \n\n` +
+      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toFixed(
+        2
+      )} VERSE\n` +
+      `🔥 Total Burn Events: ${totalBurnEvents}\n` +
+      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(4)}%\n`;
+
+    if (circulatingSupplyBurnedPercent) {
+      response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(
+        4
+      )}%\n`;
+    }
+
+    response += `👨‍🚀 Visit [Burn Engine](https://verse.bitcoin.com/burn/) for detailed burn stats`;
+
+    if (isTelegramCommand) {
+      // If invoked by a Telegram command, return the message for Telegram response
+      return response;
+    } else {
+      // Otherwise, post this message to all platforms
+      await postUpdate(response);
+    }
+  } catch (e) {
+    console.error(`Error in handleTotalVerseBurnedCommand: ${e.message}`);
+    await notifyError("Error in handleTotalVerseBurnedCommand: " + e.message);
+  }
+}
+
 const handleTokensBurned = async (event) => {
   await fetchVerseUsdRate();
   const amountWei = event.returnValues.amount;
@@ -189,70 +254,6 @@ async function fetchEngineBalance() {
   return response;
 }
 
-async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
-  try {
-    console.log("Fetching total Verse burned...");
-
-    const nullAddress = "0x0000000000000000000000000000000000000000";
-    const startBlock = 16129240; // Block when Verse token was created
-    const totalSupply = 210e9; // 210 billion VERSE
-    const circulatingSupply = await fetchCirculatingSupply();
-
-    console.log(
-      `Fetching Transfer events to null address from block ${startBlock}...`
-    );
-
-    const transferEventsToNull = await verseTokenContract.getPastEvents(
-      "Transfer",
-      {
-        fromBlock: startBlock,
-        toBlock: "latest",
-        filter: { to: nullAddress },
-      }
-    );
-
-    const totalBurnedWei = transferEventsToNull.reduce(
-      (sum, event) => sum + BigInt(event.returnValues.value),
-      BigInt(0)
-    );
-    const totalBurnedEth = web3.utils.fromWei(
-      totalBurnedWei.toString(),
-      "ether"
-    );
-    const totalBurnEvents = transferEventsToNull.length;
-    const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
-    const circulatingSupplyBurnedPercent = circulatingSupply
-      ? (totalBurnedEth / circulatingSupply) * 100
-      : null;
-
-    let response =
-      `** Total VERSE Burned ** \n\n` +
-      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toFixed(
-        2
-      )} VERSE\n` +
-      `🔥 Total Burn Events: ${totalBurnEvents}\n` +
-      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(4)}%\n`;
-
-    if (circulatingSupplyBurnedPercent) {
-      response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(
-        4
-      )}%\n`;
-    }
-
-    response += `👨‍🚀 Visit [Burn Engine](https://verse.bitcoin.com/burn/) for detailed burn stats`;
-
-    if (isTelegramCommand) {
-      // If invoked by a Telegram command, return the message for Telegram response
-      return response;
-    } else {
-      // Otherwise, post this message to all platforms
-      await postUpdate(response);
-    }
-  } catch (e) {
-    console.error(`Error in handleTotalVerseBurnedCommand: ${e.message}`);
-    await notifyError("Error in handleTotalVerseBurnedCommand: " + e.message);
-  }
-}
 
 // Post Update Function
 async function postUpdate(message) {

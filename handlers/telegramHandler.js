@@ -75,7 +75,7 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
     bot.onText(/\/totalverseburned/, async (msg) => {
         const chatId = msg.chat.id;
         try {
-            const response = await getTotalBurnedResponse();
+            const response = await handleTotalVerseBurnedCommand(true);
             if (!response || response.trim() === "") {
                 throw new Error("No total burned Verse data available.");
             }
