@@ -282,25 +282,28 @@ async function fetchLastFiveBurns() {
     });
 
     // Process and format the last five burn events
-    const lastFiveBurns = burnEvents
-      .slice(-5)
-      .map((event) => {
-        const amountWei = event.returnValues.value;
-        const amountEth = parseFloat(web3.utils.fromWei(amountWei, "ether"));
-        const burnDate = new Date(event.returnValues.timestamp * 1000)
-          .toISOString()
-          .split("T")[0]; // Convert Unix timestamp to date
-        const formattedAmountEth = amountEth.toLocaleString("en-US", {
-          maximumFractionDigits: 2,
-        });
-        const formattedAmountUsd = (amountEth * verseUsdRate).toLocaleString(
-          "en-US",
-          { maximumFractionDigits: 2 }
-        );
+    const lastFiveBurns = await Promise.all(
+      burnEvents
+        .slice(-5)
+        .reverse()
+        .map(async (event) => {
+          const amountWei = event.returnValues.value;
+          const amountEth = parseFloat(web3.utils.fromWei(amountWei, "ether"));
+          const block = await web3.eth.getBlock(event.blockNumber);
+          const burnDate = new Date(block.timestamp * 1000)
+            .toISOString()
+            .split("T")[0]; // Convert Unix timestamp to date
+          const formattedAmountEth = amountEth.toLocaleString("en-US", {
+            maximumFractionDigits: 2,
+          });
+          const formattedAmountUsd = (amountEth * verseUsdRate).toLocaleString(
+            "en-US",
+            { maximumFractionDigits: 2 }
+          );
 
-        return `🔥 Burned ${formattedAmountEth} VERSE (~$${formattedAmountUsd} USD) on ${burnDate} in transaction: [View tx](https://etherscan.io/tx/${event.transactionHash})`;
-      })
-      .reverse(); // Reverse to show the most recent event first
+          return `🔥 Burned ${formattedAmountEth} VERSE (~$${formattedAmountUsd} USD) on ${burnDate} in transaction: [View tx](https://etherscan.io/tx/${event.transactionHash})`;
+        })
+    );
 
     if (lastFiveBurns.length === 0) {
       return "No recent burn events found.";
