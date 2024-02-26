@@ -90,10 +90,10 @@ async function handleTransfer(event) {
     `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
     `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
   // Post to Twitter
-  await postTweet(message);
+  await postTweet(tweetMessage);
 
   // Post to Telegram and other platforms
-  await postUpdate(message);
+  await postUpdate(tweetMessage);
 }
 
 const burnMessages = [
