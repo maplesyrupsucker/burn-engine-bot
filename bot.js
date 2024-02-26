@@ -66,19 +66,35 @@ async function handleTransfer(event) {
   const burnEngineBalanceWei = await verseTokenContract.methods
     .balanceOf("0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8")
     .call();
-  lastKnownBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
+  lastKnownBalanceEth = Number(
+    web3.utils.fromWei(burnEngineBalanceWei, "ether")
+  );
 
-  const formattedValueEth = valueEth.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
-  const formattedUsdLastKnownBalanceEth = (lastKnownBalanceEth * verseUsdRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const formattedValueEth = valueEth.toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+  });
+  const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString(
+    "en-US",
+    { maximumFractionDigits: 2 }
+  );
+  const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString(
+    "en-US",
+    { maximumFractionDigits: 2 }
+  );
+  const formattedUsdLastKnownBalanceEth = (
+    lastKnownBalanceEth * verseUsdRate
+  ).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-  const tweetMessage = `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
-                       `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
-                       `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
-  await postTweet(tweetMessage);
+  const tweetMessage =
+    `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
+    `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
+    `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
+  // Post to Twitter
+  await postTweet(message);
+
+  // Post to Telegram and other platforms
+  await postUpdate(message);
 }
-
 
 const burnMessages = [
   "🔥 $VERSE is ablaze with another burn!",
@@ -152,10 +168,10 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
 
     let response =
       `** Total VERSE Burned ** \n\n` +
-      `🔥 Total Verse Burned: ${totalBurnedEth.toLocaleString(
-        "en-US",
-        { minimumFractionDigits: 2, maximumFractionDigits: 2 }
-      )} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", {
+      `🔥 Total Verse Burned: ${totalBurnedEth.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       })} USD)\n` +
