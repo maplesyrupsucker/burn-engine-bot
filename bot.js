@@ -129,31 +129,49 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
     const totalSupply = 210e9; // 210 billion VERSE
     const circulatingSupply = await fetchCirculatingSupply();
 
-    console.log(`Fetching Transfer events to null address from block ${startBlock}...`);
+    console.log(
+      `Fetching Transfer events to null address from block ${startBlock}...`
+    );
 
-    const transferEventsToNull = await verseTokenContract.getPastEvents("Transfer", {
-      fromBlock: startBlock,
-      toBlock: "latest",
-      filter: { to: nullAddress }
-    });
+    const transferEventsToNull = await verseTokenContract.getPastEvents(
+      "Transfer",
+      {
+        fromBlock: startBlock,
+        toBlock: "latest",
+        filter: { to: nullAddress },
+      }
+    );
 
     const totalBurnedWei = transferEventsToNull.reduce(
       (sum, event) => sum + BigInt(event.returnValues.value),
       BigInt(0)
     );
-    const totalBurnedEth = parseFloat(web3.utils.fromWei(totalBurnedWei.toString(), "ether"));
+    const totalBurnedEth = parseFloat(
+      web3.utils.fromWei(totalBurnedWei.toString(), "ether")
+    );
     const totalBurnUsdValue = totalBurnedEth * verseUsdRate; // Calculate USD value
     const totalBurnEvents = transferEventsToNull.length;
     const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
-    const circulatingSupplyBurnedPercent = circulatingSupply ? (totalBurnedEth / circulatingSupply) * 100 : 0;
+    const circulatingSupplyBurnedPercent = circulatingSupply
+      ? (totalBurnedEth / circulatingSupply) * 100
+      : 0;
 
-    let response = `** Total VERSE Burned ** \n\n` +
-                   `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD)\n` +
-                   `🔥 Total Burn Events: ${totalBurnEvents}\n` +
-                   `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(2)}%\n`;
+    let response =
+      `** Total VERSE Burned ** \n\n` +
+      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toLocaleString(
+        "en-US",
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+      )} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} USD)\n` +
+      `🔥 Total Burn Events: ${totalBurnEvents}\n` +
+      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(2)}%\n`;
 
     if (circulatingSupply) {
-      response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(2)}%\n`;
+      response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(
+        2
+      )}%\n`;
     }
 
     response += `👨‍🚀 Visit [Burn Engine](https://verse.bitcoin.com/burn/) for detailed burn stats`;
@@ -169,7 +187,6 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
   }
 }
 
-
 const handleTokensBurned = async (event) => {
   await fetchVerseUsdRate();
   const amountWei = event.returnValues.amount;
@@ -182,41 +199,70 @@ const handleTokensBurned = async (event) => {
   await postUpdate(await getTotalBurnedResponse());
 };
 
-async function fetchLastFiveBurns() {
-  console.log("Fetching the last five burns...");
+async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
   try {
-    const burnEvent = "Transfer";
+    console.log("Fetching total Verse burned...");
+
     const nullAddress = "0x0000000000000000000000000000000000000000";
     const startBlock = 16129240; // Block when Verse token was created
+    const totalSupply = 210e9; // 210 billion VERSE
+    const circulatingSupply = await fetchCirculatingSupply();
 
-    const burnEvents = await verseTokenContract.getPastEvents(burnEvent, {
-      fromBlock: startBlock,
-      toBlock: "latest",
-      filter: { to: nullAddress },
-    });
+    console.log(
+      `Fetching Transfer events to null address from block ${startBlock}...`
+    );
 
-    // Process and format the last five burn events
-    const lastFiveBurns = burnEvents
-      .slice(-5)
-      .map((event) => {
-        const amountWei = event.returnValues.value;
-        const amountEth = web3.utils.fromWei(amountWei, "ether");
-        const formattedAmount = parseFloat(amountEth).toLocaleString("en-US", {
-          maximumFractionDigits: 2,
-        });
-        return `🔥 Burned ${formattedAmount} VERSE in transaction: [View tx](https://etherscan.io/tx/${event.transactionHash})`;
-      })
-      .reverse(); // Reverse to show the most recent event first
+    const transferEventsToNull = await verseTokenContract.getPastEvents(
+      "Transfer",
+      {
+        fromBlock: startBlock,
+        toBlock: "latest",
+        filter: { to: nullAddress },
+      }
+    );
 
-    if (lastFiveBurns.length === 0) {
-      return "No recent burn events found.";
+    const totalBurnedWei = transferEventsToNull.reduce(
+      (sum, event) => sum + BigInt(event.returnValues.value),
+      BigInt(0)
+    );
+    const totalBurnedEth = parseFloat(
+      web3.utils.fromWei(totalBurnedWei.toString(), "ether")
+    );
+    const totalBurnUsdValue = totalBurnedEth * verseUsdRate; // Calculate USD value
+    const totalBurnEvents = transferEventsToNull.length;
+    const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
+    const circulatingSupplyBurnedPercent = circulatingSupply
+      ? (totalBurnedEth / circulatingSupply) * 100
+      : 0;
+
+    let response =
+      `** Total VERSE Burned ** \n\n` +
+      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toLocaleString(
+        "en-US",
+        { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+      )} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} USD)\n` +
+      `🔥 Total Burn Events: ${totalBurnEvents}\n` +
+      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(2)}%\n`;
+
+    if (circulatingSupply) {
+      response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(
+        2
+      )}%\n`;
     }
 
-    console.log("Last five burns:", lastFiveBurns);
-    return lastFiveBurns.join("\n\n");
-  } catch (error) {
-    console.error("Error fetching last five burns:", error);
-    throw error; // Rethrow the error to be handled by the command handler
+    response += `👨‍🚀 Visit [Burn Engine](https://verse.bitcoin.com/burn/) for detailed burn stats`;
+
+    if (isTelegramCommand) {
+      return response; // Return response for Telegram
+    } else {
+      await postUpdate(response); // Post to all platforms
+    }
+  } catch (e) {
+    console.error(`Error in handleTotalVerseBurnedCommand: ${e.message}`);
+    await notifyError("Error in handleTotalVerseBurnedCommand: " + e.message);
   }
 }
 
@@ -230,8 +276,16 @@ async function fetchEngineBalance() {
     web3.utils.fromWei(burnEngineBalanceWei, "ether")
   );
 
-  const formattedVerseBalance = burnEngineBalanceEth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const formattedUsdBalance = (burnEngineBalanceEth * verseUsdRate).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formattedVerseBalance = burnEngineBalanceEth.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  const formattedUsdBalance = (
+    burnEngineBalanceEth * verseUsdRate
+  ).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
   const response =
     `🔥 Current Burn Engine Balance: ${formattedVerseBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
@@ -239,7 +293,6 @@ async function fetchEngineBalance() {
 
   return response;
 }
-
 
 // Post Update Function
 async function postUpdate(message) {
