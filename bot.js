@@ -58,7 +58,6 @@ const fetchCirculatingSupply = async () => {
     await notifyError(`Error fetching circulating supply: ${e.message}`);
   }
 };
-
 async function handleTransfer(event) {
   await fetchVerseUsdRate();
   const valueWei = event.returnValues.value;
@@ -67,24 +66,19 @@ async function handleTransfer(event) {
   const burnEngineBalanceWei = await verseTokenContract.methods
     .balanceOf("0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8")
     .call();
-  lastKnownBalanceEth = Number(
-    web3.utils.fromWei(burnEngineBalanceWei, "ether")
-  );
+  lastKnownBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
 
-  const tweetMessage =
-    `🚀 $Verse Burn Engine Deposit Detected: ${numberWithCommas(
-      valueEth.toFixed(2)
-    )} VERSE (~$${numberWithCommas(
-      (valueEth * verseUsdRate).toFixed(2)
-    )} USD)\n` +
-    `🔥 Current Burn Engine Balance: ${numberWithCommas(
-      lastKnownBalanceEth.toFixed(2)
-    )} VERSE (~$${numberWithCommas(
-      (lastKnownBalanceEth * verseUsdRate).toFixed(2)
-    )} USD)\n` +
-    `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
+  const formattedValueEth = valueEth.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const formattedUsdLastKnownBalanceEth = (lastKnownBalanceEth * verseUsdRate).toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+  const tweetMessage = `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
+                       `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
+                       `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
   await postTweet(tweetMessage);
 }
+
 
 const burnMessages = [
   "🔥 $VERSE is ablaze with another burn!",
