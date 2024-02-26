@@ -158,7 +158,7 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
 
     let response =
       `** Total VERSE Burned ** \n\n` +
-      `🔥 Cumulative Verse Tokens Burned: ${totalBurnedEth.toLocaleString(
+      `🔥 Total Verse Burned: ${totalBurnedEth.toLocaleString(
         "en-US",
         { minimumFractionDigits: 2, maximumFractionDigits: 2 }
       )} VERSE (~$${totalBurnUsdValue.toLocaleString("en-US", {
