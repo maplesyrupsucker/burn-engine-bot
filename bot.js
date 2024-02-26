@@ -135,35 +135,38 @@ const handleTokensBurned = async (event) => {
 async function fetchLastFiveBurns() {
   console.log("Fetching the last five burns...");
   try {
-      const burnEvent = "Transfer";
-      const nullAddress = "0x0000000000000000000000000000000000000000";
-      const startBlock = 16129240; // Block when Verse token was created
+    const burnEvent = "Transfer";
+    const nullAddress = "0x0000000000000000000000000000000000000000";
+    const startBlock = 16129240; // Block when Verse token was created
 
-      const burnEvents = await verseTokenContract.getPastEvents(burnEvent, {
-          fromBlock: startBlock,
-          toBlock: "latest",
-          filter: { to: nullAddress },
-      });
+    const burnEvents = await verseTokenContract.getPastEvents(burnEvent, {
+      fromBlock: startBlock,
+      toBlock: "latest",
+      filter: { to: nullAddress },
+    });
 
-      // Process and format the last five burn events
-      const lastFiveBurns = burnEvents
-          .slice(-5)
-          .map((event) => {
-              const amountWei = event.returnValues.value;
-              const amountEth = web3.utils.fromWei(amountWei, "ether");
-              return `🔥 Burned ${amountEth} VERSE in transaction [${event.transactionHash}](https://etherscan.io/tx/${event.transactionHash})`;
-          })
-          .reverse(); // Reverse to show the most recent event first
+    // Process and format the last five burn events
+    const lastFiveBurns = burnEvents
+      .slice(-5)
+      .map((event) => {
+        const amountWei = event.returnValues.value;
+        const amountEth = web3.utils.fromWei(amountWei, "ether");
+        const formattedAmount = parseFloat(amountEth).toLocaleString("en-US", {
+          maximumFractionDigits: 2,
+        });
+        return `🔥 Burned ${formattedAmount} VERSE in transaction: [View tx](https://etherscan.io/tx/${event.transactionHash})`;
+      })
+      .reverse(); // Reverse to show the most recent event first
 
-      if (lastFiveBurns.length === 0) {
-          return "No recent burn events found.";
-      }
+    if (lastFiveBurns.length === 0) {
+      return "No recent burn events found.";
+    }
 
-      console.log("Last five burns:", lastFiveBurns);
-      return lastFiveBurns.join("\n\n");
+    console.log("Last five burns:", lastFiveBurns);
+    return lastFiveBurns.join("\n\n");
   } catch (error) {
-      console.error("Error fetching last five burns:", error);
-      throw error; // Rethrow the error to be handled by the command handler
+    console.error("Error fetching last five burns:", error);
+    throw error; // Rethrow the error to be handled by the command handler
   }
 }
 
