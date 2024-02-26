@@ -146,15 +146,15 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
       (sum, event) => sum + BigInt(event.returnValues.value),
       BigInt(0)
     );
-    const totalBurnedEth = web3.utils.fromWei(
-      totalBurnedWei.toString(),
-      "ether"
+    // Convert string to number before calling toFixed
+    const totalBurnedEth = parseFloat(
+      web3.utils.fromWei(totalBurnedWei.toString(), "ether")
     );
     const totalBurnEvents = transferEventsToNull.length;
     const totalSupplyBurnedPercent = (totalBurnedEth / totalSupply) * 100;
     const circulatingSupplyBurnedPercent = circulatingSupply
       ? (totalBurnedEth / circulatingSupply) * 100
-      : null;
+      : 0; // Adjusted to 0 instead of null for consistency
 
     let response =
       `** Total VERSE Burned ** \n\n` +
@@ -162,11 +162,11 @@ async function handleTotalVerseBurnedCommand(isTelegramCommand = false) {
         2
       )} VERSE\n` +
       `🔥 Total Burn Events: ${totalBurnEvents}\n` +
-      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(4)}%\n`;
+      `📊 % of Total Supply Burned: ${totalSupplyBurnedPercent.toFixed(2)}%\n`;
 
     if (circulatingSupplyBurnedPercent) {
       response += `🌐 % of Circulating Supply Burned: ${circulatingSupplyBurnedPercent.toFixed(
-        4
+        2
       )}%\n`;
     }
 
@@ -253,7 +253,6 @@ async function fetchEngineBalance() {
 
   return response;
 }
-
 
 // Post Update Function
 async function postUpdate(message) {
