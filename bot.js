@@ -85,15 +85,18 @@ async function handleTransfer(event) {
     lastKnownBalanceEth * verseUsdRate
   ).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-  const tweetMessage =
+  const depositMessage =
     `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
     `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
     `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
   // Post to Twitter
-  await postTweet(tweetMessage);
+  await handleTwitterPost(depositMessage);
 
-  // Post to Telegram and other platforms
-  await postUpdate(tweetMessage);
+  if (isTelegramCommand) {
+    return depositMessage; // Return response for Telegram
+  } else {
+    await postUpdate(depositMessage); // Post to all platforms
+  }
 }
 
 const burnMessages = [
@@ -358,8 +361,9 @@ async function fetchEngineBalance() {
 // Post Update Function
 async function postUpdate(message) {
   try {
-    console.log("Posting to Telegram...");
+    // Posting to Telegram
     await handleTelegramPost(message);
+    console.log("Successfully posted to Telegram.");
   } catch (error) {
     console.error("Error posting to Telegram:", error);
     await notifyError("Error posting to Telegram: " + error.message);
@@ -404,7 +408,7 @@ async function monitorEvents() {
     try {
       const latestBlock = await web3.eth.getBlockNumber();
       const fromBlock =
-        lastProcessedBlock > 0 ? lastProcessedBlock + 1 : 18481385; // Starting block
+        lastProcessedBlock > 0 ? lastProcessedBlock + 1 : 16129240; // Starting block
 
       if (fromBlock <= latestBlock) {
         // Monitor transfers to the burn engine address
