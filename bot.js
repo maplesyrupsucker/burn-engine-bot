@@ -59,43 +59,43 @@ const fetchCirculatingSupply = async () => {
   }
 };
 async function handleTransfer(event) {
-  await fetchVerseUsdRate();
-  const valueWei = event.returnValues.value;
-  const valueEth = Number(web3.utils.fromWei(valueWei, "ether"));
+  try {
+    await fetchVerseUsdRate();
+    const valueWei = event.returnValues.value;
+    const valueEth = Number(web3.utils.fromWei(valueWei, "ether"));
 
-  const burnEngineBalanceWei = await verseTokenContract.methods
-    .balanceOf("0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8")
-    .call();
-  lastKnownBalanceEth = Number(
-    web3.utils.fromWei(burnEngineBalanceWei, "ether")
-  );
+    const burnEngineBalanceWei = await verseTokenContract.methods
+      .balanceOf("0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8")
+      .call();
+    lastKnownBalanceEth = Number(
+      web3.utils.fromWei(burnEngineBalanceWei, "ether")
+    );
 
-  const formattedValueEth = valueEth.toLocaleString("en-US", {
-    maximumFractionDigits: 2,
-  });
-  const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString(
-    "en-US",
-    { maximumFractionDigits: 2 }
-  );
-  const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString(
-    "en-US",
-    { maximumFractionDigits: 2 }
-  );
-  const formattedUsdLastKnownBalanceEth = (
-    lastKnownBalanceEth * verseUsdRate
-  ).toLocaleString("en-US", { maximumFractionDigits: 2 });
+    const formattedValueEth = valueEth.toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+    });
+    const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString(
+      "en-US",
+      { maximumFractionDigits: 2 }
+    );
+    const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString(
+      "en-US",
+      { maximumFractionDigits: 2 }
+    );
+    const formattedUsdLastKnownBalanceEth = (
+      lastKnownBalanceEth * verseUsdRate
+    ).toLocaleString("en-US", { maximumFractionDigits: 2 });
 
-  const depositMessage =
-    `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
-    `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
-    `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
-  // Post to Twitter
-  await handleTwitterPost(depositMessage);
-
-  if (isTelegramCommand) {
-    return depositMessage; // Return response for Telegram
-  } else {
-    await postUpdate(depositMessage); // Post to all platforms
+    const depositMessage =
+      `🚀 $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
+      `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
+      `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
+    // Post to Twitter and other platforms directly
+    await handleTwitterPost(depositMessage); // Ensure this is correctly implemented to post to Twitter
+    await postUpdate(depositMessage); // Ensure this posts to all other platforms like Telegram, Slack, etc.
+  } catch (error) {
+    console.error(`Error handling transfer event: ${error}`);
+    await notifyError(`Error handling transfer event: ${error.message}`);
   }
 }
 
