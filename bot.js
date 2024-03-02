@@ -6,10 +6,10 @@ const {
   notifyError,
   setupTelegramCommands,
 } = require("./handlers/telegramHandler");
-const { handleSlackPost } = require("./handlers/slackHandler");
+// const { handleSlackPost } = require("./handlers/slackHandler");
 // const { handleFacebookPost } = require("./handlers/facebookHandler");
 // const { handleDiscordPost } = require("./handlers/discordHandler");
-const { handleTwitterPost } = require("./handlers/twitterHandler");
+const { postTweet } = require("./handlers/twitterHandler");
 
 // Web3 Setup
 const web3 = new Web3(new Web3.providers.HttpProvider(process.env.INFURA_URL));
@@ -91,7 +91,7 @@ async function handleTransfer(event) {
       `🔥 Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
       `🔥 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!`;
     // Post to Twitter and other platforms directly
-    await handleTwitterPost(depositMessage); // Ensure this is correctly implemented to post to Twitter
+    await postTweet(depositMessage); // Ensure this is correctly implemented to post to Twitter
     await postUpdate(depositMessage); // Ensure this posts to all other platforms like Telegram, Slack, etc.
   } catch (error) {
     console.error(`Error handling transfer event: ${error}`);
@@ -395,7 +395,7 @@ async function postUpdate(message) {
 
   try {
     console.log("Posting to Twitter...");
-    await handleTwitterPost(message);
+    await postTweet(message);
   } catch (error) {
     console.error("Error posting to Twitter:", error);
     await notifyError("Error posting to Twitter: " + error.message);
