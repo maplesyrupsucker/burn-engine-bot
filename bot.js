@@ -402,11 +402,28 @@ async function postUpdate(message) {
   }
 }
 
+async function retryRequest(asyncFunc, maxRetries = 3, initialDelay = 1000) {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      return await asyncFunc();
+    } catch (error) {
+      retries++;
+      if (retries === maxRetries) {
+        throw error;
+      }
+      const delay = initialDelay * Math.pow(2, retries - 1);
+      console.warn(`Request failed. Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 // Monitor Events
 async function monitorEvents() {
   while (true) {
     try {
-      const latestBlock = await web3.eth.getBlockNumber();
+      const latestBlock = await retryRequest(() => web3.eth.getBlockNumber());
       const fromBlock =
         lastProcessedBlock > 0 ? lastProcessedBlock + 1 : 16129240; // Starting block
 
@@ -441,6 +458,8 @@ async function monitorEvents() {
     }
   }
 }
+
+
 
 // Initialize
 async function initialize() {
