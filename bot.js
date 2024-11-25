@@ -172,3 +172,85 @@ const handleTokensBurned = async (event) => {
   await postUpdate(message);
   await postUpdate(await getTotalBurnedResponse());
 };
+
+// Function to fetch last five burns
+async function fetchLastFiveBurns() {
+  try {
+    const events = await verseTokenContract.getPastEvents('TokensBurned', {
+      fromBlock: lastProcessedBlock - 10000, // Look back ~10000 blocks
+      toBlock: 'latest'
+    });
+
+    const lastFiveBurns = events.slice(-5).reverse();
+    if (lastFiveBurns.length === 0) {
+      return "No burns found in recent history.";
+    }
+
+    let message = "🔥 *Last 5 VERSE Burns:*\n\n";
+    for (const event of lastFiveBurns) {
+      const amountWei = event.returnValues.amount;
+      const amountEth = web3.utils.fromWei(amountWei, "ether");
+      const formattedAmount = formatAmount(amountEth);
+      const txHash = event.transactionHash;
+      message += `${CONFIG.EMOJIS.FIRE} ${formattedAmount}\n`;
+      message += `${CONFIG.ETHERSCAN_BASE_URL}${txHash}\n\n`;
+    }
+    return message;
+  } catch (error) {
+    console.error("Error fetching burns:", error);
+    throw new Error("Failed to fetch recent burns");
+  }
+}
+
+// Function to fetch engine balance
+async function fetchEngineBalance() {
+  try {
+    await fetchVerseUsdRate();
+    const burnEngineBalanceWei = await verseTokenContract.methods
+      .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
+      .call();
+    const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
+    
+    const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+    const formattedUsdBalance = (balanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+
+    return `${CONFIG.EMOJIS.FIRE} *Current Burn Engine Balance:*\n${formattedBalance} VERSE (~$${formattedUsdBalance} USD)`;
+  } catch (error) {
+    console.error("Error fetching engine balance:", error);
+    throw new Error("Failed to fetch burn engine balance");
+  }
+}
+
+// Function to handle total VERSE burned command
+async function handleTotalVerseBurnedCommand(includePercentage = true) {
+  try {
+    const totalBurnedWei = await verseTokenContract.methods
+      .totalBurned()
+      .call();
+    const totalBurnedEth = Number(web3.utils.fromWei(totalBurnedWei, "ether"));
+    
+    let message = `${CONFIG.EMOJIS.FIRE} *Total VERSE Burned:*\n${formatAmount(totalBurnedEth)}`;
+    
+    if (includePercentage) {
+      const circulatingSupply = await fetchCirculatingSupply();
+      if (circulatingSupply) {
+        const burnPercentage = (totalBurnedEth / CONFIG.TOTAL_SUPPLY) * 100;
+        message += `\n\n${CONFIG.EMOJIS.CHART} *Burn Statistics:*`;
+        message += `\nPercentage of Total Supply: ${burnPercentage.toFixed(4)}%`;
+      }
+    }
+    
+    return message;
+  } catch (error) {
+    console.error("Error fetching total burned:", error);
+    throw new Error("Failed to fetch total burned VERSE");
+  }
+}
+
+// Initialize Telegram commands
+setupTelegramCommands({
+  fetchLastFiveBurns,
+  fetchEngineBalance,
+  handleTotalVerseBurnedCommand,
+  notifyError
+});

@@ -48,27 +48,23 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
         const chatId = msg.chat.id;
         try {
             const response = await fetchLastFiveBurns();
-            if (!response || response.trim() === "") {
-                throw new Error("No burn data available.");
-            }
             await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
         } catch (error) {
             console.error(`Error in /burns command: ${error.message}`);
             await notifyError(`Error in /burns command: ${error.message}`);
-            await bot.sendMessage(chatId, "Sorry, there was an error processing your /burns command: " + error.message);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
         }
     });
-    
-    
 
     bot.onText(/\/enginebalance/, async (msg) => {
         const chatId = msg.chat.id;
         try {
             const response = await fetchEngineBalance();
-            bot.sendMessage(chatId, response);
+            await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
         } catch (error) {
-            notifyError(`Error in /enginebalance command: ${error.message}`);
-            bot.sendMessage(chatId, "Sorry, there was an error processing your /enginebalance command.");
+            console.error(`Error in /enginebalance command: ${error.message}`);
+            await notifyError(`Error in /enginebalance command: ${error.message}`);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
         }
     });
 
@@ -76,18 +72,13 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
         const chatId = msg.chat.id;
         try {
             const response = await handleTotalVerseBurnedCommand(true);
-            if (!response || response.trim() === "") {
-                throw new Error("No total burned Verse data available.");
-            }
             await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
         } catch (error) {
             console.error(`Error in /totalverseburned command: ${error.message}`);
             await notifyError(`Error in /totalverseburned command: ${error.message}`);
-            await bot.sendMessage(chatId, "Sorry, there was an error processing your /totalverseburned command: " + error.message);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
         }
     });
-    
-    // Add more command handlers as needed
 }
 
 module.exports = {
