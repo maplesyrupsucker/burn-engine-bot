@@ -36,14 +36,7 @@ async function fetchVerseUsdRate() {
 const formatAmount = (verseAmount) => {
   const formattedVerse = parseFloat(verseAmount).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
   const usdValue = verseAmount * verseUsdRate;
-  const formattedUsd = usdValue.toLocaleString("en-US", {
-    style: "decimal",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-    useGrouping: true
-  });
-  
-  return `${formattedVerse} VERSE (~$${formattedUsd} USD)`;
+  return `${formattedVerse} VERSE (~$${usdValue.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)`;
 };
 
 // Fetch Circulating Supply
@@ -164,7 +157,8 @@ async function periodicStatusUpdate() {
     const statusMessage = 
       `${CONFIG.EMOJIS.CHART} Burn Engine Status Update:\n` +
       `${CONFIG.EMOJIS.FIRE} Current Balance: ${formattedBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
-      CONFIG.BURN_ENGINE_PROMPT;
+      CONFIG.BURN_ENGINE_PROMPT + '\n\n' +
+      `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
 
     await postTweet(statusMessage);
     await handleTelegramPost(statusMessage);
@@ -208,7 +202,8 @@ const handleTransferToBurn = async (event) => {
         `${CONFIG.EMOJIS.FIRE}${CONFIG.EMOJIS.EXPLOSION} $VERSE Burn Detected: ${formattedMessage}\n` +
         `${CONFIG.EMOJIS.FIRE} Burn Engine Balance: ${formattedBurnEngineBalance}\n\n` +
         `${getRandomBurnMessage()}\n\n` +
-        `View on Etherscan: ${etherscanUrl}`;
+        `View on Etherscan: ${etherscanUrl}\n\n` +
+        `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
 
       // Post to all social media channels
       await Promise.all([
@@ -257,13 +252,15 @@ async function fetchLastFiveBurns() {
   try {
     // Get current block number
     const latestBlock = await web3.eth.getBlockNumber();
-    // Look back ~1000 blocks instead of 10000 (about 3-4 hours)
-    const lookbackBlocks = 1000;
+    // Look back ~1 month (about 200,000 blocks)
+    const lookbackBlocks = 200000;
     const fromBlock = Math.max(CONFIG.START_BLOCK, latestBlock - lookbackBlocks);
 
     // Convert block numbers to hex
     const fromBlockHex = '0x' + fromBlock.toString(16);
     const latestBlockHex = '0x' + latestBlock.toString(16);
+
+    console.log(`Fetching burns from block ${fromBlock} to ${latestBlock}`); // Debug log
 
     const events = await verseTokenContract.getPastEvents('Transfer', {
       fromBlock: fromBlockHex,
@@ -273,7 +270,7 @@ async function fetchLastFiveBurns() {
 
     const lastFiveBurns = events.slice(-5).reverse();
     if (lastFiveBurns.length === 0) {
-      return "🔥 *No burns found in recent history.*\n\nTry the /totalverseburned command to see all-time burn statistics.";
+      return "🔥 *No burns found in the last month.*\n\nTry the /totalverseburned command to see all-time burn statistics.";
     }
 
     await fetchVerseUsdRate(); // Fetch rate once for all burns
@@ -286,9 +283,17 @@ async function fetchLastFiveBurns() {
       const formattedUsd = (amountEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
       const txHash = event.transactionHash;
       
+      // Add block number and date if available
+      const block = await web3.eth.getBlock(event.blockNumber);
+      const date = block ? new Date(block.timestamp * 1000).toLocaleString() : 'Unknown date';
+      
       message += `${CONFIG.EMOJIS.FIRE} ${formattedVerse} VERSE (~$${formattedUsd} USD)\n`;
+      message += `Date: ${date}\n`;
       message += `${CONFIG.ETHERSCAN_BASE_URL}${txHash}\n\n`;
     }
+    
+    // Add burn page link at the end
+    message += `\n${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
     return message;
   } catch (error) {
     console.error("Error fetching burns:", error);
@@ -342,6 +347,8 @@ async function handleTotalVerseBurnedCommand(includePercentage = true) {
         message += `\nPercentage of Total Supply: ${burnPercentage.toFixed(4)}%`;
       }
     }
+    
+    message += `\n\n${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
     
     return message;
   } catch (error) {
