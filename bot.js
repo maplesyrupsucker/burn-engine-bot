@@ -123,7 +123,32 @@ async function monitorEvents() {
   }
 }
 
-// Set up periodic status updates
+// Add this function before the setInterval call
+async function periodicStatusUpdate() {
+  try {
+    await fetchVerseUsdRate();
+    const burnEngineBalanceWei = await verseTokenContract.methods
+      .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
+      .call();
+    const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
+    
+    const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+    const formattedUsdBalance = (balanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+
+    const statusMessage = 
+      `${CONFIG.EMOJIS.CHART} Burn Engine Status Update:\n` +
+      `${CONFIG.EMOJIS.FIRE} Current Balance: ${formattedBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
+      CONFIG.BURN_ENGINE_PROMPT;
+
+    await postTweet(statusMessage);
+    await handleTelegramPost(statusMessage);
+  } catch (error) {
+    console.error(`${CONFIG.ERROR_PREFIX}in periodic status update:`, error);
+    await notifyError(`Periodic status update error: ${error.message}`);
+  }
+}
+
+// Now this setInterval call will work
 setInterval(periodicStatusUpdate, CONFIG.STATUS_UPDATE_INTERVAL);
 
 // Set up periodic USD rate updates
