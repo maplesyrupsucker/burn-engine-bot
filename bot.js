@@ -160,25 +160,47 @@ function getRandomBurnMessage() {
   return CONFIG.BURN_MESSAGES[randomIndex];
 }
 
-// Update handleTokensBurned to use the burn messages
-const handleTokensBurned = async (event) => {
-  await fetchVerseUsdRate();
-  const amountWei = event.returnValues.amount;
-  const amountEth = web3.utils.fromWei(amountWei, "ether");
-  const formattedMessage = formatAmount(amountEth);
-  const etherscanUrl = `${CONFIG.ETHERSCAN_BASE_URL}${event.transactionHash}`;
+// Update handleTokensBurned to handleTransferToBurn
+const handleTransferToBurn = async (event) => {
+  // Only process if the transfer is to the null address (burn)
+  if (event.returnValues.to === CONFIG.NULL_ADDRESS) {
+    await fetchVerseUsdRate();
+    const amountWei = event.returnValues.value;
+    const amountEth = web3.utils.fromWei(amountWei, "ether");
+    const formattedMessage = formatAmount(amountEth);
+    const etherscanUrl = `${CONFIG.ETHERSCAN_BASE_URL}${event.transactionHash}`;
 
-  const message = `${CONFIG.EMOJIS.FIRE}${CONFIG.EMOJIS.EXPLOSION} $VERSE Burn Detected: ${formattedMessage}\n\n${getRandomBurnMessage()}\n\nView on Etherscan: ${etherscanUrl}`;
-  await postUpdate(message);
-  await postUpdate(await getTotalBurnedResponse());
+    const message = `${CONFIG.EMOJIS.FIRE}${CONFIG.EMOJIS.EXPLOSION} $VERSE Burn Detected: ${formattedMessage}\n\n${getRandomBurnMessage()}\n\nView on Etherscan: ${etherscanUrl}`;
+    await handleTelegramPost(message);
+    await postTweet(message);
+  }
 };
+
+// Update monitorTokenBurns function to use handleTransferToBurn
+async function monitorTokenBurns(fromBlock, toBlock) {
+  try {
+    const events = await verseTokenContract.getPastEvents('Transfer', {
+      fromBlock,
+      toBlock,
+      filter: { to: CONFIG.NULL_ADDRESS }
+    });
+
+    for (const event of events) {
+      await handleTransferToBurn(event);
+    }
+  } catch (error) {
+    console.error(`${CONFIG.ERROR_PREFIX}monitoring burns:`, error);
+    await notifyError(`Error monitoring burns: ${error.message}`);
+  }
+}
 
 // Function to fetch last five burns
 async function fetchLastFiveBurns() {
   try {
-    const events = await verseTokenContract.getPastEvents('TokensBurned', {
+    const events = await verseTokenContract.getPastEvents('Transfer', {
       fromBlock: lastProcessedBlock - 10000, // Look back ~10000 blocks
-      toBlock: 'latest'
+      toBlock: 'latest',
+      filter: { to: CONFIG.NULL_ADDRESS }
     });
 
     const lastFiveBurns = events.slice(-5).reverse();
@@ -188,7 +210,7 @@ async function fetchLastFiveBurns() {
 
     let message = "🔥 *Last 5 VERSE Burns:*\n\n";
     for (const event of lastFiveBurns) {
-      const amountWei = event.returnValues.amount;
+      const amountWei = event.returnValues.value;
       const amountEth = web3.utils.fromWei(amountWei, "ether");
       const formattedAmount = formatAmount(amountEth);
       const txHash = event.transactionHash;
@@ -224,10 +246,19 @@ async function fetchEngineBalance() {
 // Function to handle total VERSE burned command
 async function handleTotalVerseBurnedCommand(includePercentage = true) {
   try {
-    const totalBurnedWei = await verseTokenContract.methods
-      .totalBurned()
-      .call();
-    const totalBurnedEth = Number(web3.utils.fromWei(totalBurnedWei, "ether"));
+    // Get all Transfer events to the null address (burns)
+    const events = await verseTokenContract.getPastEvents('Transfer', {
+      fromBlock: CONFIG.START_BLOCK,
+      toBlock: 'latest',
+      filter: { to: CONFIG.NULL_ADDRESS }
+    });
+    
+    // Sum up all transfers to null address
+    const totalBurnedWei = events.reduce((total, event) => {
+      return total.add(web3.utils.toBN(event.returnValues.value));
+    }, web3.utils.toBN(0));
+
+    const totalBurnedEth = Number(web3.utils.fromWei(totalBurnedWei.toString(), "ether"));
     
     let message = `${CONFIG.EMOJIS.FIRE} *Total VERSE Burned:*\n${formatAmount(totalBurnedEth)}`;
     
