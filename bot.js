@@ -323,6 +323,9 @@ async function fetchEngineBalance() {
 // Function to handle total VERSE burned command
 async function handleTotalVerseBurnedCommand(includePercentage = true) {
   try {
+    // Fetch USD rate first
+    await fetchVerseUsdRate();
+    
     // Get all Transfer events to the null address (burns)
     const events = await verseTokenContract.getPastEvents('Transfer', {
       fromBlock: CONFIG.START_BLOCK,
@@ -336,8 +339,10 @@ async function handleTotalVerseBurnedCommand(includePercentage = true) {
     }, web3.utils.toBN(0));
 
     const totalBurnedEth = Number(web3.utils.fromWei(totalBurnedWei.toString(), "ether"));
+    const formattedVerse = totalBurnedEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+    const formattedUsd = (totalBurnedEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
     
-    let message = `${CONFIG.EMOJIS.FIRE} *Total VERSE Burned:*\n${formatAmount(totalBurnedEth)}`;
+    let message = `${CONFIG.EMOJIS.FIRE} *Total VERSE Burned:*\n${formattedVerse} VERSE (~$${formattedUsd} USD)`;
     
     if (includePercentage) {
       const circulatingSupply = await fetchCirculatingSupply();
