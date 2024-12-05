@@ -4,6 +4,11 @@ const TelegramBot = require("node-telegram-bot-api");
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
 const myTelegramId = process.env.MY_TELEGRAM_ID; // Your Telegram User ID for receiving error notifications
 
+// Add these variables at the top of bot.js for tracking Telegram notifications
+let lastTelegramNotificationTime = 0;
+let lastReportedTelegramBalance = '0';
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
 // Function to post a message to Telegram
 async function handleTelegramPost(message) {
     try {
