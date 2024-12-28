@@ -86,8 +86,8 @@ const CONFIG = {
 
   // Empty Balance Messages Array
   EMPTY_BALANCE_MESSAGES: [
-    "🔥 Fueling the Verse ecosystem! Each buyback & burn reduces supply, strengthening your Verse holdings.",
-    "💎 Holders win! The Verse burn engine keeps supply deflationary, creating long-term benefits for the community.",
+    "🔥 Fueling the Verse ecosystem! Each buyback & burn reduces supply",
+    "💎 The Verse burn engine keeps supply deflationary.",
     "🔥 Did you know? Community deposits help drive the Verse burn engine, reducing supply and increasing scarcity. A smarter future with Verse.",
     "🚀 The Verse burn engine is hard at work, turning buybacks into burns and building a stronger ecosystem. Less supply, more scarcity!",
     "💡 What makes Verse unique? Continuous buyback and burn mechanisms that reward the committed. Together, we rise.",
