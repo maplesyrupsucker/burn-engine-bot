@@ -84,7 +84,7 @@ const CONFIG = {
     "🔥 $VERSE burn: a fiery spectacle!"
   ],
 
-  // Add new empty balance messages array
+  // Empty Balance Messages Array
   EMPTY_BALANCE_MESSAGES: [
     "🔥 Fueling the Verse ecosystem! Each buyback & burn reduces supply, strengthening your Verse holdings.",
     "💎 Holders win! The Verse burn engine keeps supply deflationary, creating long-term benefits for the community.",
@@ -97,16 +97,8 @@ const CONFIG = {
     "🔥 Every buyback matters. Every burn counts. The Verse ecosystem is built to reward the visionary.",
     "🌍 Deposits fuel the fire! The Verse burn engine turns your contributions into a deflationary force. Together, we grow.",
     "🚀 Verse isn't just a token—it's a movement. Burn and grow with us as we shape the future of decentralized finance.",
-    "🔥 Stronger together! Community-driven deposits and the Verse burn engine create a win-win for everyone involved. Deflation for innovation.",
-    "🔥 'Burning love, burning love, just a hunka, hunka burning love.' - Elvis",
-    "🔥 'I'm on fire, I'm on fire, I'm on fire.' - Bruce Springsteen",
-    "🔥 'You light up my life, you give me hope to carry on.' - Debbie Boone",
-    "🔥 'Come on baby, light my fire.' - The Doors",
-    "🔥 'This fire is out of control, I'm going to burn this city down.' - The Prodigy",
-    "🔥 'I feel the heat, I feel the heat, I feel the heat.' - Madonna",
-    "🔥 'You’re the flame in my heart, you’re the fire in my soul.' - Johnny Cash",
-    "🔥 'I’m burning for you, I’m burning for you.' - Blue Öyster Cult",
-    "🔥 'Set fire to the rain, watch it pour as I touch your face.' - Adele"
-  ],
+    "🔥 Stronger together! Community-driven deposits and the Verse burn engine create a win-win for everyone involved. Deflation for innovation."
+  ]
+};
 
 module.exports = CONFIG; 
