@@ -83,6 +83,30 @@ const CONFIG = {
     "🚀 The $VERSE flame dances with another burn!",
     "🔥 $VERSE burn: a fiery spectacle!"
   ],
-};
+
+  // Add new empty balance messages array
+  EMPTY_BALANCE_MESSAGES: [
+    "🔥 Fueling the Verse ecosystem! Each buyback & burn reduces supply, strengthening your Verse holdings.",
+    "💎 Holders win! The Verse burn engine keeps supply deflationary, creating long-term benefits for the community.",
+    "🔥 Did you know? Community deposits help drive the Verse burn engine, reducing supply and increasing scarcity. A smarter future with Verse.",
+    "🚀 The Verse burn engine is hard at work, turning buybacks into burns and building a stronger ecosystem. Less supply, more scarcity!",
+    "💡 What makes Verse unique? Continuous buyback and burn mechanisms that reward the committed. Together, we rise.",
+    "🔥 Scarcity drives growth. The Verse burn engine is a key driver for deflation, shaping a brighter future for all holders.",
+    "🚀 Transforming deposits into deflation: Verse's burn engine drives sustainable progress and growth.",
+    "💎 A burning passion for crypto! Verse is revolutionizing the game with a powerful deflationary mechanism. Are you in?",
+    "🔥 Every buyback matters. Every burn counts. The Verse ecosystem is built to reward the visionary.",
+    "🌍 Deposits fuel the fire! The Verse burn engine turns your contributions into a deflationary force. Together, we grow.",
+    "🚀 Verse isn't just a token—it's a movement. Burn and grow with us as we shape the future of decentralized finance.",
+    "🔥 Stronger together! Community-driven deposits and the Verse burn engine create a win-win for everyone involved. Deflation for innovation.",
+    "🔥 'Burning love, burning love, just a hunka, hunka burning love.' - Elvis",
+    "🔥 'I'm on fire, I'm on fire, I'm on fire.' - Bruce Springsteen",
+    "🔥 'You light up my life, you give me hope to carry on.' - Debbie Boone",
+    "🔥 'Come on baby, light my fire.' - The Doors",
+    "🔥 'This fire is out of control, I'm going to burn this city down.' - The Prodigy",
+    "🔥 'I feel the heat, I feel the heat, I feel the heat.' - Madonna",
+    "🔥 'You’re the flame in my heart, you’re the fire in my soul.' - Johnny Cash",
+    "🔥 'I’m burning for you, I’m burning for you.' - Blue Öyster Cult",
+    "🔥 'Set fire to the rain, watch it pour as I touch your face.' - Adele"
+  ],
 
 module.exports = CONFIG; 

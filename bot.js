@@ -78,22 +78,44 @@ async function handleTransfer(event) {
     const burnEngineBalanceWei = await verseTokenContract.methods
       .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
       .call();
-    lastKnownBalanceEth = Number(
-      web3.utils.fromWei(burnEngineBalanceWei, "ether")
-    );
+    const currentBalance = burnEngineBalanceWei.toString();
+    lastKnownBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
 
-    const formattedValueEth = valueEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
-    const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
-    const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
-    const formattedUsdLastKnownBalanceEth = (lastKnownBalanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+    let message;
+    
+    if (lastKnownBalanceEth === 0) {
+      // If balance is 0, use a random educational/promotional message
+      message = getRandomEmptyBalanceMessage() + '\n\n' +
+        `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    } else {
+      const formattedValueEth = valueEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+      const formattedLastKnownBalanceEth = lastKnownBalanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+      const formattedUsdValueEth = (valueEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+      const formattedUsdLastKnownBalanceEth = (lastKnownBalanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
 
-    const depositMessage =
-      `${CONFIG.EMOJIS.ROCKET} $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
-      `${CONFIG.EMOJIS.FIRE} Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
-      CONFIG.BURN_ENGINE_PROMPT;
+      message =
+        `${CONFIG.EMOJIS.ROCKET} $Verse Burn Engine Deposit Detected: ${formattedValueEth} VERSE (~$${formattedUsdValueEth} USD)\n` +
+        `${CONFIG.EMOJIS.FIRE} Current Burn Engine Balance: ${formattedLastKnownBalanceEth} VERSE (~$${formattedUsdLastKnownBalanceEth} USD)\n` +
+        CONFIG.BURN_ENGINE_PROMPT + '\n\n' +
+        `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    }
 
-    await handleTelegramPost(depositMessage);
-    await postTweet(depositMessage);
+    // Always post to Twitter in real-time
+    await postTweet(message);
+
+    // Check if we should send Telegram notification
+    const now = Date.now();
+    const shouldNotifyTelegram = 
+      (now - lastTelegramNotificationTime >= ONE_DAY_MS) && // More than 24 hours since last notification
+      (currentBalance !== lastReportedTelegramBalance); // Balance has changed
+
+    if (shouldNotifyTelegram) {
+      await handleTelegramPost(message);
+      // Update Telegram tracking variables
+      lastTelegramNotificationTime = now;
+      lastReportedTelegramBalance = currentBalance;
+    }
+
   } catch (error) {
     console.error(`${CONFIG.ERROR_PREFIX}handling transfer event:`, error);
     await notifyError(`Error handling transfer event: ${error.message}`);
@@ -142,26 +164,56 @@ async function monitorEvents() {
   }
 }
 
-// Add this function before the setInterval call
+// Function to get random empty balance message
+function getRandomEmptyBalanceMessage() {
+  const randomIndex = Math.floor(Math.random() * CONFIG.EMPTY_BALANCE_MESSAGES.length);
+  return CONFIG.EMPTY_BALANCE_MESSAGES[randomIndex];
+}
+
+// Update periodicStatusUpdate to handle empty balance
 async function periodicStatusUpdate() {
   try {
     await fetchVerseUsdRate();
     const burnEngineBalanceWei = await verseTokenContract.methods
       .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
       .call();
+    const currentBalance = burnEngineBalanceWei.toString();
     const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
     
-    const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
-    const formattedUsdBalance = (balanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+    let message;
+    
+    if (balanceEth === 0) {
+      // If balance is 0, use a random educational/promotional message
+      message = getRandomEmptyBalanceMessage() + '\n\n' +
+        `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    } else {
+      // Regular status message for non-zero balance
+      const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
+      const formattedUsdBalance = (balanceEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
 
-    const statusMessage = 
-      `${CONFIG.EMOJIS.CHART} Burn Engine Status Update:\n` +
-      `${CONFIG.EMOJIS.FIRE} Current Balance: ${formattedBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
-      CONFIG.BURN_ENGINE_PROMPT + '\n\n' +
-      `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+      message = 
+        `${CONFIG.EMOJIS.CHART} Burn Engine Status Update:\n` +
+        `${CONFIG.EMOJIS.FIRE} Current Balance: ${formattedBalance} VERSE (~$${formattedUsdBalance} USD)\n` +
+        CONFIG.BURN_ENGINE_PROMPT + '\n\n' +
+        `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    }
 
-    await postTweet(statusMessage);
-    await handleTelegramPost(statusMessage);
+    // Always post to Twitter in real-time
+    await postTweet(message);
+
+    // Check if we should send Telegram notification
+    const now = Date.now();
+    const shouldNotifyTelegram = 
+      (now - lastTelegramNotificationTime >= ONE_DAY_MS) && // More than 24 hours since last notification
+      (currentBalance !== lastReportedTelegramBalance); // Balance has changed
+
+    if (shouldNotifyTelegram) {
+      await handleTelegramPost(message);
+      // Update Telegram tracking variables
+      lastTelegramNotificationTime = now;
+      lastReportedTelegramBalance = currentBalance;
+    }
+
   } catch (error) {
     console.error(`${CONFIG.ERROR_PREFIX}in periodic status update:`, error);
     await notifyError(`Periodic status update error: ${error.message}`);
