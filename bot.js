@@ -18,6 +18,7 @@ const verseTokenContract = new web3.eth.Contract(
   CONFIG.VERSE_TOKEN_ADDRESS
 );
 
+let lastTelegramNotificationTime = 0;
 let verseUsdRate = 0;
 let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
