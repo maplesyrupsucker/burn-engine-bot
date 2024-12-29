@@ -20,6 +20,8 @@ const verseTokenContract = new web3.eth.Contract(
 let verseUsdRate = 0;
 let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
+let lastTelegramNotificationTime = 0; // Initialize the variable to track Telegram notification time
+let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
 
 // Fetch USD Rate
 async function fetchVerseUsdRate() {
