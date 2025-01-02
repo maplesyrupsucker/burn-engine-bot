@@ -9,8 +9,6 @@ const {
 } = require("./handlers/telegramHandler");
 const { postTweet } = require("./handlers/twitterHandler");
 const CONFIG = require('./config/constants');
-const { ethers } = require('ethers');
-const LiquidityManagerABI = require('./LiquidityManagerABI.json');
 
 // Web3 Setup
 const web3 = new Web3(new Web3.providers.HttpProvider(CONFIG.INFURA_URL));
@@ -422,123 +420,51 @@ async function handleTotalVerseBurnedCommand(includePercentage = true) {
   }
 }
 
-// Function to fetch all buybacks
+// Function to fetch all buybacks using Web3
 async function fetchAllBuyBacks() {
   try {
     console.log('Fetching all buybacks...');
     
-    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    // Get latest block
+    const latestBlock = await web3.eth.getBlockNumber();
+    const fromBlock = CONFIG.START_BLOCK_BUYBACKS;
     
-    // Fetch transactions
-    const txResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
-      params: {
-        module: 'account',
-        action: 'txlist',
-        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
-        startblock: CONFIG.START_BLOCK_BUYBACKS,
-        endblock: 99999999,
-        sort: 'desc',
-        apikey: CONFIG.ETHERSCAN_API_KEY,
-      }
-    });
-    await delay(1050); // Respect rate limit
+    console.log(`Scanning from block ${fromBlock} to ${latestBlock}`);
 
-    // Fetch VERSE transfers
-    const verseTransferResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
-      params: {
-        module: 'account',
-        action: 'tokentx',
-        contractaddress: CONFIG.VERSE_TOKEN_ADDRESS,
-        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
-        startblock: CONFIG.START_BLOCK_BUYBACKS,
-        endblock: 99999999,
-        sort: 'desc',
-        apikey: CONFIG.ETHERSCAN_API_KEY,
-      }
-    });
-    await delay(1050);
-
-    // Fetch WETH transfers
-    const wethTransferResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
-      params: {
-        module: 'account',
-        action: 'tokentx',
-        contractaddress: CONFIG.WETH_ADDRESS,
-        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
-        startblock: CONFIG.START_BLOCK_BUYBACKS,
-        endblock: 99999999,
-        sort: 'desc',
-        apikey: CONFIG.ETHERSCAN_API_KEY,
+    // Get past events using Web3
+    const buybackEvents = await verseTokenContract.getPastEvents('Transfer', {
+      fromBlock: fromBlock,
+      toBlock: latestBlock,
+      filter: {
+        from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
       }
     });
 
-    const transactions = txResponse.data.result;
-    const verseTransfers = verseTransferResponse.data.result;
-    const wethTransfers = wethTransferResponse.data.result;
+    // Process buyback events
+    let totalEthSpent = web3.utils.toBN('0');
+    const buybacks = [];
 
-    const iface = new ethers.utils.Interface(LiquidityManagerABI);
-    const buybackMap = new Map();
-
-    // Process transactions
-    transactions.forEach(tx => {
-      if (tx.isError === '0' && tx.input.startsWith('0x')) {
-        try {
-          const decodedInput = iface.parseTransaction({ data: tx.input });
-          if (
-            decodedInput.name === 'buyBackVerseTokenSimple' ||
-            decodedInput.name === 'executeBuyBackVerseTokenAuto'
-          ) {
-            buybackMap.set(tx.hash, {
-              txid: tx.hash,
-              time: parseInt(tx.timeStamp, 10),
-              verse: 0,
-              eth: parseFloat(ethers.utils.formatUnits(tx.value, 18)),
-            });
-          }
-        } catch (error) {
-          // Ignore transactions that can't be decoded
+    for (const event of buybackEvents) {
+      try {
+        // Get transaction details
+        const tx = await web3.eth.getTransaction(event.transactionHash);
+        if (tx && tx.value !== '0') {
+          const ethAmount = web3.utils.fromWei(tx.value, 'ether');
+          totalEthSpent = totalEthSpent.add(web3.utils.toBN(tx.value));
+          
+          buybacks.push({
+            hash: tx.hash,
+            eth: parseFloat(ethAmount),
+            block: event.blockNumber
+          });
         }
+      } catch (error) {
+        console.error(`Error processing transaction ${event.transactionHash}:`, error);
       }
-    });
-
-    // Process VERSE transfers
-    verseTransfers.forEach(transfer => {
-      if (buybackMap.has(transfer.hash)) {
-        const buyback = buybackMap.get(transfer.hash);
-        const transferAmount = parseFloat(ethers.utils.formatUnits(transfer.value, 18));
-
-        if (transfer.to.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
-          buyback.verse += transferAmount;
-        } else if (transfer.from.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
-          buyback.verse -= transferAmount;
-        }
-
-        buybackMap.set(transfer.hash, buyback);
-      }
-    });
-
-    // Process WETH transfers
-    wethTransfers.forEach(transfer => {
-      if (buybackMap.has(transfer.hash)) {
-        const buyback = buybackMap.get(transfer.hash);
-        const transferAmount = parseFloat(ethers.utils.formatUnits(transfer.value, 18));
-
-        if (transfer.to.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
-          buyback.eth += transferAmount;
-        } else if (transfer.from.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
-          buyback.eth -= transferAmount;
-        }
-
-        buybackMap.set(transfer.hash, buyback);
-      }
-    });
-
-    const buybacks = Array.from(buybackMap.values())
-      .filter(buyback => buyback.verse > 0 && Math.abs(buyback.eth) > 0)
-      .sort((a, b) => b.time - a.time);
+    }
 
     // Calculate totals
-    totalBuybacksEth = buybacks.reduce((sum, buyback) => sum + Math.abs(buyback.eth), 0);
+    totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent, 'ether'));
     await fetchVerseUsdRate();
     totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
 
@@ -553,84 +479,73 @@ async function fetchAllBuyBacks() {
 
     // Only post to social media if tracking is enabled
     if (CONFIG.ENABLE_BUYBACK_TRACKING) {
-      await postTweet(message);  // Only post to Twitter if tracking enabled
+      await postTweet(message);
     }
 
-    return message;  // Return formatted message for command response
+    return message;
   } catch (error) {
     console.error(`${CONFIG.ERROR_PREFIX}fetching buybacks:`, error);
     await notifyError(`Error fetching buybacks: ${error.message}`);
-    throw error;  // Throw error to be handled by command handler
+    throw error;
   }
 }
 
-// Update monitorBuybacks function
+// Monitor buybacks using Web3
 async function monitorBuybacks(fromBlock, toBlock) {
   try {
     console.log(`Monitoring buybacks from block ${fromBlock} to ${toBlock}...`);
 
-    const txResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
-      params: {
-        module: 'account',
-        action: 'txlist',
-        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
-        startblock: fromBlock,
-        endblock: toBlock,
-        sort: 'desc',
-        apikey: CONFIG.ETHERSCAN_API_KEY,
+    // Get events for this block range
+    const events = await verseTokenContract.getPastEvents('Transfer', {
+      fromBlock: fromBlock,
+      toBlock: toBlock,
+      filter: {
+        from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
       }
     });
 
-    const transactions = txResponse.data.result;
-    const iface = new ethers.utils.Interface(LiquidityManagerABI);
+    for (const event of events) {
+      try {
+        // Get transaction details
+        const tx = await web3.eth.getTransaction(event.transactionHash);
+        if (tx && tx.value !== '0') {
+          const ethAmount = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
+          await fetchVerseUsdRate();
+          const usdAmount = ethAmount * verseUsdRate;
 
-    for (const tx of transactions) {
-      if (tx.isError === '0' && tx.input.startsWith('0x')) {
-        try {
-          const decodedInput = iface.parseTransaction({ data: tx.input });
-          if (
-            decodedInput.name === 'buyBackVerseTokenSimple' ||
-            decodedInput.name === 'executeBuyBackVerseTokenAuto'
-          ) {
-            // New buyback detected
-            const ethAmount = parseFloat(ethers.utils.formatUnits(tx.value, 18));
-            await fetchVerseUsdRate();
-            const usdAmount = ethAmount * verseUsdRate;
+          const message = 
+            `${CONFIG.EMOJIS.ROCKET} New VERSE Buyback Detected!\n` +
+            `${CONFIG.EMOJIS.FIRE} Amount: ${ethAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+            `(~$${usdAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n` +
+            `${CONFIG.ETHERSCAN_BASE_URL}${tx.hash}\n\n` +
+            `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
 
-            const message = 
-              `${CONFIG.EMOJIS.ROCKET} New VERSE Buyback Detected!\n` +
-              `${CONFIG.EMOJIS.FIRE} Amount: ${ethAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
-              `(~$${usdAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n` +
-              `${CONFIG.ETHERSCAN_BASE_URL}${tx.hash}\n\n` +
-              `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+          // Always log the buyback detection
+          console.log('Buyback detected:', {
+            hash: tx.hash,
+            block: event.blockNumber,
+            ethAmount,
+            usdAmount,
+            tracking_enabled: CONFIG.ENABLE_BUYBACK_TRACKING
+          });
+          console.log('Message that would be posted:', message);
 
-            // Always log the buyback detection
-            console.log('Buyback detected:', {
-              hash: tx.hash,
-              block: tx.blockNumber,
-              ethAmount,
-              usdAmount,
-              tracking_enabled: CONFIG.ENABLE_BUYBACK_TRACKING
+          // Only post to social media if tracking is enabled
+          if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+            console.log('Posting buyback to social media...');
+            await Promise.all([
+              handleTelegramPost(message),
+              postTweet(message)
+            ]).catch(error => {
+              console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
+              notifyError(`Error broadcasting buyback message: ${error.message}`);
             });
-            console.log('Message that would be posted:', message);
-
-            // Only post to social media if tracking is enabled
-            if (CONFIG.ENABLE_BUYBACK_TRACKING) {
-              console.log('Posting buyback to social media...');
-              await Promise.all([
-                handleTelegramPost(message),
-                postTweet(message)
-              ]).catch(error => {
-                console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
-                notifyError(`Error broadcasting buyback message: ${error.message}`);
-              });
-            } else {
-              console.log('Buyback tracking disabled - skipping social media posts');
-            }
+          } else {
+            console.log('Buyback tracking disabled - skipping social media posts');
           }
-        } catch (error) {
-          console.error(`Error decoding transaction ${tx.hash}:`, error);
         }
+      } catch (error) {
+        console.error(`Error processing transaction ${event.transactionHash}:`, error);
       }
     }
   } catch (error) {
