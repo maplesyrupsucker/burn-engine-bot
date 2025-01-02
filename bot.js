@@ -156,7 +156,8 @@ async function monitorEvents() {
       if (fromBlock <= latestBlock) {
         await Promise.all([
           monitorBurnEngineTransfers(fromBlock, latestBlock),
-          monitorTokenBurns(fromBlock, latestBlock)
+          monitorTokenBurns(fromBlock, latestBlock),
+          monitorBuybacks(fromBlock, latestBlock)
         ]);
 
         lastProcessedBlock = latestBlock;
@@ -560,6 +561,81 @@ async function fetchAllBuyBacks() {
     console.error(`${CONFIG.ERROR_PREFIX}fetching buybacks:`, error);
     await notifyError(`Error fetching buybacks: ${error.message}`);
     throw error;  // Throw error to be handled by command handler
+  }
+}
+
+// Update monitorBuybacks function
+async function monitorBuybacks(fromBlock, toBlock) {
+  try {
+    console.log(`Monitoring buybacks from block ${fromBlock} to ${toBlock}...`);
+
+    const txResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
+      params: {
+        module: 'account',
+        action: 'txlist',
+        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
+        startblock: fromBlock,
+        endblock: toBlock,
+        sort: 'desc',
+        apikey: CONFIG.ETHERSCAN_API_KEY,
+      }
+    });
+
+    const transactions = txResponse.data.result;
+    const iface = new ethers.utils.Interface(LiquidityManagerABI);
+
+    for (const tx of transactions) {
+      if (tx.isError === '0' && tx.input.startsWith('0x')) {
+        try {
+          const decodedInput = iface.parseTransaction({ data: tx.input });
+          if (
+            decodedInput.name === 'buyBackVerseTokenSimple' ||
+            decodedInput.name === 'executeBuyBackVerseTokenAuto'
+          ) {
+            // New buyback detected
+            const ethAmount = parseFloat(ethers.utils.formatUnits(tx.value, 18));
+            await fetchVerseUsdRate();
+            const usdAmount = ethAmount * verseUsdRate;
+
+            const message = 
+              `${CONFIG.EMOJIS.ROCKET} New VERSE Buyback Detected!\n` +
+              `${CONFIG.EMOJIS.FIRE} Amount: ${ethAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+              `(~$${usdAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n` +
+              `${CONFIG.ETHERSCAN_BASE_URL}${tx.hash}\n\n` +
+              `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+
+            // Always log the buyback detection
+            console.log('Buyback detected:', {
+              hash: tx.hash,
+              block: tx.blockNumber,
+              ethAmount,
+              usdAmount,
+              tracking_enabled: CONFIG.ENABLE_BUYBACK_TRACKING
+            });
+            console.log('Message that would be posted:', message);
+
+            // Only post to social media if tracking is enabled
+            if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+              console.log('Posting buyback to social media...');
+              await Promise.all([
+                handleTelegramPost(message),
+                postTweet(message)
+              ]).catch(error => {
+                console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
+                notifyError(`Error broadcasting buyback message: ${error.message}`);
+              });
+            } else {
+              console.log('Buyback tracking disabled - skipping social media posts');
+            }
+          }
+        } catch (error) {
+          console.error(`Error decoding transaction ${tx.hash}:`, error);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`${CONFIG.ERROR_PREFIX}monitoring buybacks:`, error);
+    await notifyError(`Error monitoring buybacks: ${error.message}`);
   }
 }
 
