@@ -162,27 +162,43 @@ async function retryRequest(asyncFunc, maxRetries = CONFIG.MAX_RETRIES, initialD
 
 // Monitor Events
 async function monitorEvents() {
-  while (true) {
-    try {
-      const latestBlock = await retryRequest(() => web3.eth.getBlockNumber());
-      const fromBlock = lastProcessedBlock > 0 ? lastProcessedBlock + 1 : CONFIG.START_BLOCK;
+  try {
+    // Initial setup
+    console.log('Starting event monitoring...');
+    await fetchVerseUsdRate();
+    
+    // Get initial block
+    lastProcessedBlock = lastProcessedBlock || CONFIG.START_BLOCK;
+    console.log(`Starting from block ${lastProcessedBlock}`);
 
-      if (fromBlock <= latestBlock) {
-        await Promise.all([
-          monitorBurnEngineTransfers(fromBlock, latestBlock),
-          monitorTokenBurns(fromBlock, latestBlock),
-          monitorBuybacks(fromBlock, latestBlock)
-        ]);
+    // Start monitoring loop
+    setInterval(async () => {
+      try {
+        const latestBlock = await retryRequest(() => web3.eth.getBlockNumber());
+        const fromBlock = lastProcessedBlock + 1;
 
-        lastProcessedBlock = latestBlock;
+        if (fromBlock <= latestBlock) {
+          console.log(`Processing blocks ${fromBlock} to ${latestBlock}`);
+          
+          await Promise.all([
+            monitorBurnEngineTransfers(fromBlock, latestBlock),
+            monitorTokenBurns(fromBlock, latestBlock),
+            monitorBuybacks(fromBlock, latestBlock)
+          ]);
+
+          lastProcessedBlock = latestBlock;
+          console.log(`Updated last processed block to ${lastProcessedBlock}`);
+        }
+      } catch (error) {
+        console.error(`${CONFIG.ERROR_PREFIX}in event monitoring cycle:`, error);
+        await notifyError(`Event monitoring cycle error: ${error.message}`);
       }
+    }, CONFIG.POLLING_INTERVAL);
 
-      await new Promise(resolve => setTimeout(resolve, CONFIG.POLLING_INTERVAL));
-    } catch (error) {
-      console.error(`${CONFIG.ERROR_PREFIX}in event monitoring:`, error);
-      await notifyError(`Event monitoring error: ${error.message}`);
-      await new Promise(resolve => setTimeout(resolve, CONFIG.ERROR_RETRY_INTERVAL));
-    }
+    console.log('Event monitoring initialized successfully');
+  } catch (error) {
+    console.error(`${CONFIG.ERROR_PREFIX}initializing event monitoring:`, error);
+    await notifyError(`Failed to initialize event monitoring: ${error.message}`);
   }
 }
 
@@ -642,4 +658,31 @@ setupTelegramCommands({
   handleTotalVerseBurnedCommand,
   fetchAllBuyBacks,
   notifyError
+});
+
+// Initialize monitoring and periodic updates
+async function initializeBot() {
+  try {
+    console.log('Initializing bot...');
+    
+    // Start event monitoring
+    await monitorEvents();
+    
+    // Set up periodic status updates
+    setInterval(periodicStatusUpdate, CONFIG.STATUS_UPDATE_INTERVAL);
+    
+    // Set up periodic USD rate updates
+    setInterval(fetchVerseUsdRate, CONFIG.USD_RATE_UPDATE_INTERVAL);
+    
+    console.log('Bot initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize bot:', error);
+    process.exit(1);
+  }
+}
+
+// Initialize the bot
+initializeBot().catch(error => {
+  console.error('Critical error during bot initialization:', error);
+  process.exit(1);
 });
