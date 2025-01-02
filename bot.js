@@ -445,21 +445,24 @@ async function fetchAllBuyBacks() {
       }
     });
 
-    // Sum up all transfers
-    const totalEthSpent = events.reduce(async (total, event) => {
+    console.log(`Found ${events.length} transfer events to process`);
+
+    // Process events sequentially to avoid rate limiting
+    let totalEthSpent = web3.utils.toBN('0');
+    
+    for (const event of events) {
       try {
         const tx = await web3.eth.getTransaction(event.transactionHash);
         if (tx && tx.value !== '0') {
-          return total.add(web3.utils.toBN(tx.value));
+          totalEthSpent = totalEthSpent.add(web3.utils.toBN(tx.value));
+          console.log(`Added buyback tx ${tx.hash} with value ${web3.utils.fromWei(tx.value, 'ether')} ETH`);
         }
-        return total;
       } catch (error) {
         console.error(`Error processing transaction ${event.transactionHash}:`, error);
-        return total;
       }
-    }, web3.utils.toBN('0'));
+    }
 
-    totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent.toString(), 'ether'));
+    totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent, 'ether'));
     totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
 
     const message = 
