@@ -118,7 +118,15 @@ const CONFIG = {
     "🔥 Burn it down, burn it down! - Linkin Park 🎶",
     "🔥 I'm on fire! - Bruce Springsteen 🎸",
     "🔥 Stronger together! Community-driven deposits and the Verse burn engine create a win-win for everyone involved. Deflation for innovation."
-  ]
+  ],
+
+  // Buyback Settings
+  ENABLE_BUYBACK_TRACKING: false, // Toggle for buyback tracking
+  LIQUIDITY_MANAGER_ADDRESS: '0x7970ede037856c14354baaf30b5f882c169cdc80',
+  WETH_ADDRESS: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
+  ETHERSCAN_API_KEY: process.env.ETHERSCAN_API_KEY,
+  ETHERSCAN_API_URL: 'https://api.etherscan.io/api',
+  START_BLOCK_BUYBACKS: 20412293,
 };
 
 module.exports = CONFIG; 

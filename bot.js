@@ -9,6 +9,8 @@ const {
 } = require("./handlers/telegramHandler");
 const { postTweet } = require("./handlers/twitterHandler");
 const CONFIG = require('./config/constants');
+const { ethers } = require('ethers');
+const LiquidityManagerABI = require('./LiquidityManagerABI.json');
 
 // Web3 Setup
 const web3 = new Web3(new Web3.providers.HttpProvider(CONFIG.INFURA_URL));
@@ -23,6 +25,8 @@ let verseUsdRate = 0;
 let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
 let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
+let totalBuybacksEth = 0;
+let totalBuybacksUsd = 0;
 
 // Fetch USD Rate
 async function fetchVerseUsdRate() {
@@ -417,10 +421,185 @@ async function handleTotalVerseBurnedCommand(includePercentage = true) {
   }
 }
 
+// Function to fetch all buybacks
+async function fetchAllBuyBacks() {
+  try {
+    console.log('Fetching all buybacks...');
+    
+    const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+    
+    // Fetch transactions
+    const txResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
+      params: {
+        module: 'account',
+        action: 'txlist',
+        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
+        startblock: CONFIG.START_BLOCK_BUYBACKS,
+        endblock: 99999999,
+        sort: 'desc',
+        apikey: CONFIG.ETHERSCAN_API_KEY,
+      }
+    });
+    await delay(1050); // Respect rate limit
+
+    // Fetch VERSE transfers
+    const verseTransferResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
+      params: {
+        module: 'account',
+        action: 'tokentx',
+        contractaddress: CONFIG.VERSE_TOKEN_ADDRESS,
+        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
+        startblock: CONFIG.START_BLOCK_BUYBACKS,
+        endblock: 99999999,
+        sort: 'desc',
+        apikey: CONFIG.ETHERSCAN_API_KEY,
+      }
+    });
+    await delay(1050);
+
+    // Fetch WETH transfers
+    const wethTransferResponse = await axios.get(CONFIG.ETHERSCAN_API_URL, {
+      params: {
+        module: 'account',
+        action: 'tokentx',
+        contractaddress: CONFIG.WETH_ADDRESS,
+        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS,
+        startblock: CONFIG.START_BLOCK_BUYBACKS,
+        endblock: 99999999,
+        sort: 'desc',
+        apikey: CONFIG.ETHERSCAN_API_KEY,
+      }
+    });
+
+    const transactions = txResponse.data.result;
+    const verseTransfers = verseTransferResponse.data.result;
+    const wethTransfers = wethTransferResponse.data.result;
+
+    const iface = new ethers.utils.Interface(LiquidityManagerABI);
+    const buybackMap = new Map();
+
+    // Process transactions
+    transactions.forEach(tx => {
+      if (tx.isError === '0' && tx.input.startsWith('0x')) {
+        try {
+          const decodedInput = iface.parseTransaction({ data: tx.input });
+          if (
+            decodedInput.name === 'buyBackVerseTokenSimple' ||
+            decodedInput.name === 'executeBuyBackVerseTokenAuto'
+          ) {
+            buybackMap.set(tx.hash, {
+              txid: tx.hash,
+              time: parseInt(tx.timeStamp, 10),
+              verse: 0,
+              eth: parseFloat(ethers.utils.formatUnits(tx.value, 18)),
+            });
+          }
+        } catch (error) {
+          // Ignore transactions that can't be decoded
+        }
+      }
+    });
+
+    // Process VERSE transfers
+    verseTransfers.forEach(transfer => {
+      if (buybackMap.has(transfer.hash)) {
+        const buyback = buybackMap.get(transfer.hash);
+        const transferAmount = parseFloat(ethers.utils.formatUnits(transfer.value, 18));
+
+        if (transfer.to.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.verse += transferAmount;
+        } else if (transfer.from.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.verse -= transferAmount;
+        }
+
+        buybackMap.set(transfer.hash, buyback);
+      }
+    });
+
+    // Process WETH transfers
+    wethTransfers.forEach(transfer => {
+      if (buybackMap.has(transfer.hash)) {
+        const buyback = buybackMap.get(transfer.hash);
+        const transferAmount = parseFloat(ethers.utils.formatUnits(transfer.value, 18));
+
+        if (transfer.to.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.eth += transferAmount;
+        } else if (transfer.from.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.eth -= transferAmount;
+        }
+
+        buybackMap.set(transfer.hash, buyback);
+      }
+    });
+
+    const buybacks = Array.from(buybackMap.values())
+      .filter(buyback => buyback.verse > 0 && Math.abs(buyback.eth) > 0)
+      .sort((a, b) => b.time - a.time);
+
+    // Calculate totals
+    totalBuybacksEth = buybacks.reduce((sum, buyback) => sum + Math.abs(buyback.eth), 0);
+    await fetchVerseUsdRate();
+    totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
+
+    const message = 
+      `${CONFIG.EMOJIS.CHART} *Total VERSE Buybacks:*\n` +
+      `${CONFIG.EMOJIS.FIRE} ${totalBuybacksEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+      `(~$${totalBuybacksUsd.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n\n` +
+      `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+
+    // Log results regardless of tracking setting
+    console.log('Buyback stats:', message);
+
+    // Only post to social media if tracking is enabled
+    if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+      await Promise.all([
+        handleTelegramPost(message),
+        postTweet(message)
+      ]);
+    }
+
+    return message;  // Return formatted message for command response
+  } catch (error) {
+    console.error(`${CONFIG.ERROR_PREFIX}fetching buybacks:`, error);
+    await notifyError(`Error fetching buybacks: ${error.message}`);
+    throw error;  // Throw error to be handled by command handler
+  }
+}
+
 // Initialize Telegram commands
 setupTelegramCommands({
   fetchLastFiveBurns,
   fetchEngineBalance,
   handleTotalVerseBurnedCommand,
+  fetchAllBuyBacks,
   notifyError
 });
+
+// Add command handler for /fetchallbuybacks
+function setupTelegramCommands({
+  fetchLastFiveBurns,
+  fetchEngineBalance,
+  handleTotalVerseBurnedCommand,
+  fetchAllBuyBacks,
+  notifyError
+}) {
+  // ... existing commands ...
+
+  bot.onText(/\/fetchallbuybacks/, async (msg) => {
+    const chatId = msg.chat.id;
+    try {
+      await fetchAllBuyBacks();
+      const message = 
+        `${CONFIG.EMOJIS.CHART} Total VERSE Buybacks:\n` +
+        `${CONFIG.EMOJIS.FIRE} ${totalBuybacksEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+        `(~$${totalBuybacksUsd.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n\n` +
+        `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+      
+      await bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error(`Error in /fetchallbuybacks command: ${error.message}`);
+      await notifyError(`Error in /fetchallbuybacks command: ${error.message}`);
+      await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
+    }
+  });
+}

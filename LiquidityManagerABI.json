@@ -1,0 +1,484 @@
+[
+    {
+        "inputs": [],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "addedVerse",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "addedWeth",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "liquidity",
+                "type": "uint256"
+            }
+        ],
+        "name": "LogAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amountWeth",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "amountVerse",
+                "type": "uint256"
+            }
+        ],
+        "name": "LogOut",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "requiredWethForSwap",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "minAmountVerseToBuy",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "reserve0",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "reserve1",
+                "type": "uint256"
+            }
+        ],
+        "name": "LogQuote",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUse",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minAmountVerseToBuy",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwap",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_desiredVerseToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_desiredWethToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethToAddBack",
+                "type": "uint256"
+            }
+        ],
+        "name": "buyBackVerseToken",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUse",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minAmountVerseToBuy",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwap",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethToAddBack",
+                "type": "uint256"
+            }
+        ],
+        "name": "buyBackVerseTokenSimple",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "executeBuyBackVerseTokenAuto",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUse",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwap",
+                "type": "uint256"
+            }
+        ],
+        "name": "executeBuyBackVerseTokenSimple",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getLiquidityTokenBalanceSelf",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUse",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwap",
+                "type": "uint256"
+            }
+        ],
+        "name": "getOptimalParameters",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUseOut",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minAmountVerseToBuy",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwapOut",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethToAddBack",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getOptimalParametersAuto",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "_liquidityAmountToUseOut",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethRemoved",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_minAmountVerseToBuy",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_maxAmountWethForSwapOut",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinVerseToAddBack",
+                "type": "uint256"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_expectMinWethToAddBack",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getVerseBalanceSelf",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getWethBalanceSelf",
+        "outputs": [
+            {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "pair",
+        "outputs": [
+            {
+                "internalType": "contract ISwapsPair",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "router",
+        "outputs": [
+            {
+                "internalType": "contract ISwapsRouter",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_owner",
+                "type": "address"
+            }
+        ],
+        "name": "setOwner",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_worker",
+                "type": "address"
+            }
+        ],
+        "name": "setWorker",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token0",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "token1",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_to",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "withdrawETH",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "internalType": "address",
+                "name": "_token",
+                "type": "address"
+            },
+            {
+                "internalType": "address",
+                "name": "_to",
+                "type": "address"
+            },
+            {
+                "internalType": "uint256",
+                "name": "_amount",
+                "type": "uint256"
+            }
+        ],
+        "name": "withdrawTokens",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "worker",
+        "outputs": [
+            {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]

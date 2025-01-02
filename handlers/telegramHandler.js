@@ -48,7 +48,13 @@ async function notifyError(errorMessage) {
 }
 
 // Function to set up Telegram commands
-function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleTotalVerseBurnedCommand, notifyError }) {
+function setupTelegramCommands({ 
+  fetchLastFiveBurns, 
+  fetchEngineBalance, 
+  handleTotalVerseBurnedCommand, 
+  fetchAllBuyBacks, 
+  notifyError 
+}) {
     bot.onText(/\/burns/, async (msg) => {
         const chatId = msg.chat.id;
         try {
@@ -81,6 +87,18 @@ function setupTelegramCommands({ fetchLastFiveBurns, fetchEngineBalance, handleT
         } catch (error) {
             console.error(`Error in /totalverseburned command: ${error.message}`);
             await notifyError(`Error in /totalverseburned command: ${error.message}`);
+            await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
+        }
+    });
+
+    bot.onText(/\/fetchallbuybacks/, async (msg) => {
+        const chatId = msg.chat.id;
+        try {
+            const response = await fetchAllBuyBacks();
+            await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
+        } catch (error) {
+            console.error(`Error in /fetchallbuybacks command: ${error.message}`);
+            await notifyError(`Error in /fetchallbuybacks command: ${error.message}`);
             await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
         }
     });
