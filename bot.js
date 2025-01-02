@@ -29,18 +29,7 @@ let verseUsdRate = 0;
 let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
 let lastTelegramNotificationTime = 0; // Initialize the variable to track Telegram notification time
-let totalBuybacksEth = 0;
-let totalBuybacksUsd = 0;
-let cachedBuybackStats = {
-  message: '',
-  totalEth: 0,
-  totalUsd: 0,
-  lastUpdate: 0,
-  lastProcessedBlock: 0
-};
-const BUYBACK_CACHE_TTL = 3600000; // 1 hour in milliseconds
-const BUYBACK_SIMPLE_SIGNATURE = '0x4c2a8378';  // web3.utils.keccak256('buyBackVerseTokenSimple()').slice(0, 10)
-const BUYBACK_AUTO_SIGNATURE = '0x6b1d4db7';    // web3.utils.keccak256('executeBuyBackVerseTokenAuto()').slice(0, 10)
+let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
 
 // Fetch USD Rate
 async function fetchVerseUsdRate() {
