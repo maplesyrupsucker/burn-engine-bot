@@ -437,28 +437,37 @@ async function fetchAllBuyBacks() {
     await fetchVerseUsdRate();
     
     // Get all Transfer events from liquidity manager in one go
-    const events = await verseTokenContract.getPastEvents('Transfer', {
-      fromBlock: CONFIG.START_BLOCK_BUYBACKS,
-      toBlock: 'latest',
-      filter: {
-        from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
-      }
+    const events = await retryRequest(async () => {
+      return await verseTokenContract.getPastEvents('Transfer', {
+        fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+        toBlock: 'latest',
+        filter: {
+          from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
+        }
+      });
     });
 
     console.log(`Found ${events.length} transfer events to process`);
 
-    // Process events sequentially to avoid rate limiting
+    // Process events sequentially with retry and delay
     let totalEthSpent = web3.utils.toBN('0');
     
     for (const event of events) {
       try {
-        const tx = await web3.eth.getTransaction(event.transactionHash);
+        // Add delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        const tx = await retryRequest(async () => {
+          return await web3.eth.getTransaction(event.transactionHash);
+        });
+
         if (tx && tx.value !== '0') {
           totalEthSpent = totalEthSpent.add(web3.utils.toBN(tx.value));
           console.log(`Added buyback tx ${tx.hash} with value ${web3.utils.fromWei(tx.value, 'ether')} ETH`);
         }
       } catch (error) {
         console.error(`Error processing transaction ${event.transactionHash}:`, error);
+        // Continue with next transaction even if this one fails
       }
     }
 
