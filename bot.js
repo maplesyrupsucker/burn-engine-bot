@@ -19,6 +19,11 @@ const verseTokenContract = new web3.eth.Contract(
   CONFIG.VERSE_TOKEN_ADDRESS
 );
 
+const liquidityManagerContract = new web3.eth.Contract(
+  LiquidityManagerABI,
+  CONFIG.LIQUIDITY_MANAGER_ADDRESS
+);
+
 let lastTelegramNotificationTime = 0;
 let verseUsdRate = 0;
 let lastProcessedBlock = 0;
@@ -439,16 +444,29 @@ async function fetchAllBuyBacks() {
     // Fetch USD rate first
     await fetchVerseUsdRate();
     
-    // Get all transactions to the liquidity manager
-    const buybackTxs = await retryRequest(async () => {
-      return await web3.eth.getPastLogs({
-        fromBlock: CONFIG.START_BLOCK_BUYBACKS,
-        toBlock: 'latest',
-        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS
-      });
-    });
+    // Get all transactions and transfers
+    const [buybackTxs, verseTransfers] = await Promise.all([
+      retryRequest(async () => {
+        return await liquidityManagerContract.getPastEvents('allEvents', {
+          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+          toBlock: 'latest'
+        });
+      }),
+      retryRequest(async () => {
+        return await verseTokenContract.getPastEvents('Transfer', {
+          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+          toBlock: 'latest',
+          filter: {
+            $or: [
+              { from: CONFIG.LIQUIDITY_MANAGER_ADDRESS },
+              { to: CONFIG.LIQUIDITY_MANAGER_ADDRESS }
+            ]
+          }
+        });
+      })
+    ]);
 
-    console.log(`Found ${buybackTxs.length} transactions to process`);
+    console.log(`Found ${buybackTxs.length} transactions and ${verseTransfers.length} VERSE transfers to process`);
 
     // Create map to track buybacks
     const buybackMap = new Map();
@@ -465,31 +483,61 @@ async function fetchAllBuyBacks() {
 
         if (!tx || !tx.input || tx.input.length < 10) continue;
 
-        // Get function signature (first 4 bytes of input)
-        const functionSig = tx.input.slice(0, 10).toLowerCase();
+        try {
+          // Decode the transaction input
+          const decodedInput = liquidityManagerContract.methods.decodeParameters(
+            ['string'],
+            tx.input.slice(10)
+          );
 
-        // Check if transaction is a buyback operation
-        if (functionSig === BUYBACK_SIMPLE_SIGNATURE || 
-            functionSig === BUYBACK_AUTO_SIGNATURE) {
+          const functionName = decodedInput[0];
           
-          const ethValue = web3.utils.toBN(tx.value);
-          totalEthSpent = totalEthSpent.add(ethValue);
-          
-          buybackMap.set(tx.hash, {
-            hash: tx.hash,
-            ethAmount: web3.utils.fromWei(tx.value, 'ether'),
-            blockNumber: tx.blockNumber
-          });
+          if (functionName === 'buyBackVerseTokenSimple' || 
+              functionName === 'executeBuyBackVerseTokenAuto') {
+            
+            const ethValue = web3.utils.toBN(tx.value);
+            
+            buybackMap.set(tx.hash, {
+              hash: tx.hash,
+              ethAmount: parseFloat(web3.utils.fromWei(tx.value, 'ether')),
+              verseAmount: 0,
+              blockNumber: tx.blockNumber
+            });
 
-          console.log(`Added buyback tx ${tx.hash} with value ${web3.utils.fromWei(tx.value, 'ether')} ETH`);
+            totalEthSpent = totalEthSpent.add(ethValue);
+            console.log(`Added buyback tx ${tx.hash} with value ${web3.utils.fromWei(tx.value, 'ether')} ETH`);
+          }
+        } catch (decodeError) {
+          // Skip transactions that can't be decoded
+          console.log(`Couldn't decode transaction ${tx.hash}: ${decodeError.message}`);
         }
       } catch (error) {
         console.error(`Error processing transaction ${log.transactionHash}:`, error);
       }
     }
 
-    // Calculate totals
-    totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent, 'ether'));
+    // Process VERSE transfers for buybacks
+    for (const transfer of verseTransfers) {
+      if (buybackMap.has(transfer.transactionHash)) {
+        const buyback = buybackMap.get(transfer.transactionHash);
+        const transferAmount = parseFloat(web3.utils.fromWei(transfer.returnValues.value, 'ether'));
+
+        if (transfer.returnValues.to.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.verseAmount += transferAmount;
+        } else if (transfer.returnValues.from.toLowerCase() === CONFIG.LIQUIDITY_MANAGER_ADDRESS.toLowerCase()) {
+          buyback.verseAmount -= transferAmount;
+        }
+
+        buybackMap.set(transfer.transactionHash, buyback);
+      }
+    }
+
+    // Filter valid buybacks (must have both ETH and VERSE)
+    const validBuybacks = Array.from(buybackMap.values())
+      .filter(buyback => buyback.verseAmount > 0 && buyback.ethAmount > 0);
+
+    // Calculate totals from valid buybacks
+    totalBuybacksEth = validBuybacks.reduce((total, buyback) => total + buyback.ethAmount, 0);
     totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
 
     const message = 
@@ -502,8 +550,8 @@ async function fetchAllBuyBacks() {
     console.log('Buyback stats:', {
       totalEthSpent: totalBuybacksEth,
       totalUsdValue: totalBuybacksUsd,
-      numberOfBuybacks: buybackMap.size,
-      buybacks: Array.from(buybackMap.values())
+      numberOfBuybacks: validBuybacks.length,
+      buybacks: validBuybacks
     });
 
     // Only post to social media if tracking is enabled
