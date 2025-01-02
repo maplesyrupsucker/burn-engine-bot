@@ -555,7 +555,10 @@ async function fetchAllBuyBacks() {
       await Promise.all([
         handleTelegramPost(message),
         postTweet(message)
-      ]);
+      ]).catch(error => {
+        console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
+        notifyError(`Error broadcasting buyback message: ${error.message}`);
+      });
     }
 
     return message;  // Return formatted message for command response
