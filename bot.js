@@ -659,30 +659,3 @@ setupTelegramCommands({
   fetchAllBuyBacks,
   notifyError
 });
-
-// Initialize monitoring and periodic updates
-async function initializeBot() {
-  try {
-    console.log('Initializing bot...');
-    
-    // Start event monitoring
-    await monitorEvents();
-    
-    // Set up periodic status updates
-    setInterval(periodicStatusUpdate, CONFIG.STATUS_UPDATE_INTERVAL);
-    
-    // Set up periodic USD rate updates
-    setInterval(fetchVerseUsdRate, CONFIG.USD_RATE_UPDATE_INTERVAL);
-    
-    console.log('Bot initialized successfully');
-  } catch (error) {
-    console.error('Failed to initialize bot:', error);
-    process.exit(1);
-  }
-}
-
-// Initialize the bot
-initializeBot().catch(error => {
-  console.error('Critical error during bot initialization:', error);
-  process.exit(1);
-});
