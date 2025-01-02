@@ -2,37 +2,18 @@ const TelegramBot = require("node-telegram-bot-api");
 
 // Initialize Telegram Bot
 const bot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN, { polling: true });
-const myTelegramId = process.env.MY_TELEGRAM_ID; // Your Telegram User ID for receiving error notifications
-
-// Add these variables at the top of bot.js for tracking Telegram notifications
-let lastTelegramNotificationTime = 0;
-let lastReportedTelegramBalance = '0';
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+const myTelegramId = process.env.MY_TELEGRAM_ID;
 
 // Function to post a message to Telegram
 async function handleTelegramPost(message) {
     try {
         const chatIds = process.env.TELEGRAM_CHAT_IDS.split(",");
         for (const chatId of chatIds) {
-            await bot.sendMessage(chatId, message);
+            await bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
         }
-        
     } catch (error) {
         console.error("Error posting to Telegram:", error);
         await notifyError(`Error in Telegram Post: ${error.message}`);
-    }
-}
-
-// Function to post a GIF to Telegram
-async function handleTelegramPostWithGIF(gifUrl) {
-    try {
-        const chatIds = process.env.TELEGRAM_CHAT_IDS.split(",");
-        for (const chatId of chatIds) {
-            await bot.sendDocument(chatId, gifUrl);
-        }
-    } catch (error) {
-        console.error("Error posting GIF to Telegram:", error);
-        await notifyError(`Error in Telegram GIF Post: ${error.message}`);
     }
 }
 
@@ -49,11 +30,9 @@ async function notifyError(errorMessage) {
 
 // Function to set up Telegram commands
 function setupTelegramCommands({ 
-  fetchLastFiveBurns, 
-  fetchEngineBalance, 
-  handleTotalVerseBurnedCommand, 
-  fetchAllBuyBacks, 
-  notifyError 
+    fetchLastFiveBurns, 
+    fetchEngineBalance, 
+    handleTotalVerseBurnedCommand
 }) {
     bot.onText(/\/burns/, async (msg) => {
         const chatId = msg.chat.id;
@@ -90,23 +69,10 @@ function setupTelegramCommands({
             await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
         }
     });
-
-    bot.onText(/\/fetchallbuybacks/, async (msg) => {
-        const chatId = msg.chat.id;
-        try {
-            const response = await fetchAllBuyBacks();
-            await bot.sendMessage(chatId, response, { parse_mode: "Markdown" });
-        } catch (error) {
-            console.error(`Error in /fetchallbuybacks command: ${error.message}`);
-            await notifyError(`Error in /fetchallbuybacks command: ${error.message}`);
-            await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
-        }
-    });
 }
 
 module.exports = {
     handleTelegramPost,
-    handleTelegramPostWithGIF,
     setupTelegramCommands,
-    notifyError // Exporting for use in bot.js
+    notifyError
 };
