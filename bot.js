@@ -34,6 +34,8 @@ let cachedBuybackStats = {
   lastProcessedBlock: 0
 };
 const BUYBACK_CACHE_TTL = 3600000; // 1 hour in milliseconds
+const BUYBACK_SIMPLE_SIGNATURE = '0x4c2a8378';  // web3.utils.keccak256('buyBackVerseTokenSimple()').slice(0, 10)
+const BUYBACK_AUTO_SIGNATURE = '0x6b1d4db7';    // web3.utils.keccak256('executeBuyBackVerseTokenAuto()').slice(0, 10)
 
 // Fetch USD Rate
 async function fetchVerseUsdRate() {
@@ -437,27 +439,16 @@ async function fetchAllBuyBacks() {
     // Fetch USD rate first
     await fetchVerseUsdRate();
     
-    // Get all Transfer events and transactions
-    const [transferEvents, buybackTxs] = await Promise.all([
-      retryRequest(async () => {
-        return await verseTokenContract.getPastEvents('Transfer', {
-          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
-          toBlock: 'latest',
-          filter: {
-            from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
-          }
-        });
-      }),
-      retryRequest(async () => {
-        return await web3.eth.getPastLogs({
-          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
-          toBlock: 'latest',
-          address: CONFIG.LIQUIDITY_MANAGER_ADDRESS
-        });
-      })
-    ]);
+    // Get all transactions to the liquidity manager
+    const buybackTxs = await retryRequest(async () => {
+      return await web3.eth.getPastLogs({
+        fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+        toBlock: 'latest',
+        address: CONFIG.LIQUIDITY_MANAGER_ADDRESS
+      });
+    });
 
-    console.log(`Found ${transferEvents.length} transfer events and ${buybackTxs.length} transactions to process`);
+    console.log(`Found ${buybackTxs.length} transactions to process`);
 
     // Create map to track buybacks
     const buybackMap = new Map();
@@ -472,11 +463,14 @@ async function fetchAllBuyBacks() {
           return await web3.eth.getTransaction(log.transactionHash);
         });
 
-        if (!tx || !tx.input) continue;
+        if (!tx || !tx.input || tx.input.length < 10) continue;
+
+        // Get function signature (first 4 bytes of input)
+        const functionSig = tx.input.slice(0, 10).toLowerCase();
 
         // Check if transaction is a buyback operation
-        if (tx.input.includes('buyBackVerseTokenSimple') || 
-            tx.input.includes('executeBuyBackVerseTokenAuto')) {
+        if (functionSig === BUYBACK_SIMPLE_SIGNATURE || 
+            functionSig === BUYBACK_AUTO_SIGNATURE) {
           
           const ethValue = web3.utils.toBN(tx.value);
           totalEthSpent = totalEthSpent.add(ethValue);
@@ -494,16 +488,6 @@ async function fetchAllBuyBacks() {
       }
     }
 
-    // Process transfer events to verify buybacks
-    for (const event of transferEvents) {
-      if (buybackMap.has(event.transactionHash)) {
-        const buyback = buybackMap.get(event.transactionHash);
-        const verseAmount = web3.utils.fromWei(event.returnValues.value, 'ether');
-        buyback.verseAmount = verseAmount;
-        buybackMap.set(event.transactionHash, buyback);
-      }
-    }
-
     // Calculate totals
     totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent, 'ether'));
     totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
@@ -518,7 +502,8 @@ async function fetchAllBuyBacks() {
     console.log('Buyback stats:', {
       totalEthSpent: totalBuybacksEth,
       totalUsdValue: totalBuybacksUsd,
-      numberOfBuybacks: buybackMap.size
+      numberOfBuybacks: buybackMap.size,
+      buybacks: Array.from(buybackMap.values())
     });
 
     // Only post to social media if tracking is enabled
