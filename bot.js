@@ -552,7 +552,13 @@ async function fetchAllBuyBacks() {
 
     // Only post to social media if tracking is enabled
     if (CONFIG.ENABLE_BUYBACK_TRACKING) {
-      await postTweet(message);  // Only post to Twitter if tracking enabled
+      await Promise.all([
+        handleTelegramPost(message),
+        postTweet(message)
+      ]).catch(error => {
+        console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
+        notifyError(`Error broadcasting buyback message: ${error.message}`);
+      });
     }
 
     return message;  // Return formatted message for command response
@@ -571,3 +577,32 @@ setupTelegramCommands({
   fetchAllBuyBacks,
   notifyError
 });
+
+// Add command handler for /fetchallbuybacks
+function setupTelegramCommands({
+  fetchLastFiveBurns,
+  fetchEngineBalance,
+  handleTotalVerseBurnedCommand,
+  fetchAllBuyBacks,
+  notifyError
+}) {
+  // ... existing commands ...
+
+  bot.onText(/\/fetchallbuybacks/, async (msg) => {
+    const chatId = msg.chat.id;
+    try {
+      await fetchAllBuyBacks();
+      const message = 
+        `${CONFIG.EMOJIS.CHART} Total VERSE Buybacks:\n` +
+        `${CONFIG.EMOJIS.FIRE} ${totalBuybacksEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+        `(~$${totalBuybacksUsd.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n\n` +
+        `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+      
+      await bot.sendMessage(chatId, message, { parse_mode: "Markdown" });
+    } catch (error) {
+      console.error(`Error in /fetchallbuybacks command: ${error.message}`);
+      await notifyError(`Error in /fetchallbuybacks command: ${error.message}`);
+      await bot.sendMessage(chatId, "Sorry, there was an error processing your request.");
+    }
+  });
+}
