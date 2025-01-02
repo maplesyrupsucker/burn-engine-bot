@@ -9,6 +9,7 @@ const {
 } = require("./handlers/telegramHandler");
 const { postTweet } = require("./handlers/twitterHandler");
 const CONFIG = require('./config/constants');
+const LiquidityManagerABI = require("./LiquidityManagerABI.json");
 
 // Web3 Setup
 const web3 = new Web3(new Web3.providers.HttpProvider(CONFIG.INFURA_URL));
@@ -436,41 +437,74 @@ async function fetchAllBuyBacks() {
     // Fetch USD rate first
     await fetchVerseUsdRate();
     
-    // Get all Transfer events from liquidity manager in one go
-    const events = await retryRequest(async () => {
-      return await verseTokenContract.getPastEvents('Transfer', {
-        fromBlock: CONFIG.START_BLOCK_BUYBACKS,
-        toBlock: 'latest',
-        filter: {
-          from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
-        }
-      });
-    });
+    // Get all Transfer events and transactions
+    const [transferEvents, buybackTxs] = await Promise.all([
+      retryRequest(async () => {
+        return await verseTokenContract.getPastEvents('Transfer', {
+          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+          toBlock: 'latest',
+          filter: {
+            from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
+          }
+        });
+      }),
+      retryRequest(async () => {
+        return await web3.eth.getPastLogs({
+          fromBlock: CONFIG.START_BLOCK_BUYBACKS,
+          toBlock: 'latest',
+          address: CONFIG.LIQUIDITY_MANAGER_ADDRESS
+        });
+      })
+    ]);
 
-    console.log(`Found ${events.length} transfer events to process`);
+    console.log(`Found ${transferEvents.length} transfer events and ${buybackTxs.length} transactions to process`);
 
-    // Process events sequentially with retry and delay
+    // Create map to track buybacks
+    const buybackMap = new Map();
     let totalEthSpent = web3.utils.toBN('0');
-    
-    for (const event of events) {
-      try {
-        // Add delay between requests to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
 
+    // Process transactions to identify buyback operations
+    for (const log of buybackTxs) {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Rate limiting delay
+        
         const tx = await retryRequest(async () => {
-          return await web3.eth.getTransaction(event.transactionHash);
+          return await web3.eth.getTransaction(log.transactionHash);
         });
 
-        if (tx && tx.value !== '0') {
-          totalEthSpent = totalEthSpent.add(web3.utils.toBN(tx.value));
+        if (!tx || !tx.input) continue;
+
+        // Check if transaction is a buyback operation
+        if (tx.input.includes('buyBackVerseTokenSimple') || 
+            tx.input.includes('executeBuyBackVerseTokenAuto')) {
+          
+          const ethValue = web3.utils.toBN(tx.value);
+          totalEthSpent = totalEthSpent.add(ethValue);
+          
+          buybackMap.set(tx.hash, {
+            hash: tx.hash,
+            ethAmount: web3.utils.fromWei(tx.value, 'ether'),
+            blockNumber: tx.blockNumber
+          });
+
           console.log(`Added buyback tx ${tx.hash} with value ${web3.utils.fromWei(tx.value, 'ether')} ETH`);
         }
       } catch (error) {
-        console.error(`Error processing transaction ${event.transactionHash}:`, error);
-        // Continue with next transaction even if this one fails
+        console.error(`Error processing transaction ${log.transactionHash}:`, error);
       }
     }
 
+    // Process transfer events to verify buybacks
+    for (const event of transferEvents) {
+      if (buybackMap.has(event.transactionHash)) {
+        const buyback = buybackMap.get(event.transactionHash);
+        const verseAmount = web3.utils.fromWei(event.returnValues.value, 'ether');
+        buyback.verseAmount = verseAmount;
+        buybackMap.set(event.transactionHash, buyback);
+      }
+    }
+
+    // Calculate totals
     totalBuybacksEth = parseFloat(web3.utils.fromWei(totalEthSpent, 'ether'));
     totalBuybacksUsd = totalBuybacksEth * verseUsdRate;
 
@@ -481,7 +515,11 @@ async function fetchAllBuyBacks() {
       `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
 
     // Log results regardless of tracking setting
-    console.log('Buyback stats:', message);
+    console.log('Buyback stats:', {
+      totalEthSpent: totalBuybacksEth,
+      totalUsdValue: totalBuybacksUsd,
+      numberOfBuybacks: buybackMap.size
+    });
 
     // Only post to social media if tracking is enabled
     if (CONFIG.ENABLE_BUYBACK_TRACKING) {
