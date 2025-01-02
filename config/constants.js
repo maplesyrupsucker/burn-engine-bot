@@ -57,7 +57,8 @@ const CONFIG = {
     CHART: "📊",
     GLOBE: "🌐",
     ASTRONAUT: "👨‍🚀",
-    ERROR: "🚨"
+    ERROR: "🚨",
+    MONEY: "💸"
   },
 
   // Message Arrays
