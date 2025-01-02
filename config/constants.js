@@ -5,16 +5,18 @@ const CONFIG = {
   VERSE_TOKEN_ADDRESS: "0x249cA82617eC3DfB2589c4c17ab7EC9765350a18",
   BURN_ENGINE_ADDRESS: "0x6b2a57dE29e6d73650Cb17b7710F2702b1F73CB8",
   NULL_ADDRESS: "0x0000000000000000000000000000000000000000",
+  LIQUIDITY_MANAGER_ADDRESS: '0x7970ede037856c14354baaf30b5f882c169cdc80',
 
   // Blockchain Settings
   START_BLOCK: 16129240, // Block when Verse token was created
+  START_BLOCK_BUYBACKS: 20412293, // Block to start monitoring buybacks from
   TOTAL_SUPPLY: 210e9, // 210 billion VERSE
 
   // Network & API Settings
   INFURA_URL: process.env.INFURA_URL,
   VERSE_PRICE_API: "https://markets.api.bitcoin.com/rates/convertor/?q=USD&c=VERSE",
   CIRCULATING_SUPPLY_API: "https://markets.api.bitcoin.com/coin/data/circulating?c=VERSE",
-  ETHERSCAN_BASE_URL: "https://etherscan.io/tx/",
+  ETHERSCAN_BASE_URL: "https://etherscan.io/tx/", // Keep this for transaction links
 
   // Time Intervals (in milliseconds)
   POLLING_INTERVAL: 30000, // 30 seconds
@@ -40,6 +42,9 @@ const CONFIG = {
   DISCORD_CHANNELS: ["general", "verse"],
   SLACK_CHANNELS: ["#verse-burns"],
 
+  // Feature Flags
+  ENABLE_BUYBACK_TRACKING: false, // Toggle for buyback tracking
+
   // Message Templates
   BURN_ENGINE_PROMPT: "🚀 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!",
   ERROR_PREFIX: "🚨 Error: ",
@@ -52,10 +57,11 @@ const CONFIG = {
     CHART: "📊",
     GLOBE: "🌐",
     ASTRONAUT: "👨‍🚀",
-    ERROR: "🚨"
+    ERROR: "🚨",
+    MONEY: "💸"
   },
 
-  // Burn Messages Array
+  // Message Arrays
   BURN_MESSAGES: [
     "🔥 $VERSE is ablaze with another burn!",
     "💥 The burn engine roars with $VERSE energy!",
@@ -118,15 +124,7 @@ const CONFIG = {
     "🔥 Burn it down, burn it down! - Linkin Park 🎶",
     "🔥 I'm on fire! - Bruce Springsteen 🎸",
     "🔥 Stronger together! Community-driven deposits and the Verse burn engine create a win-win for everyone involved. Deflation for innovation."
-  ],
-
-  // Buyback Settings
-  ENABLE_BUYBACK_TRACKING: false, // Toggle for buyback tracking
-  LIQUIDITY_MANAGER_ADDRESS: '0x7970ede037856c14354baaf30b5f882c169cdc80',
-  WETH_ADDRESS: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-  ETHERSCAN_API_KEY: process.env.ETHERSCAN_API_KEY,
-  ETHERSCAN_API_URL: 'https://api.etherscan.io/api',
-  START_BLOCK_BUYBACKS: 20412293,
+  ]
 };
 
 module.exports = CONFIG; 
