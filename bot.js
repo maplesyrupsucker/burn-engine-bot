@@ -1,5 +1,6 @@
 require("dotenv").config();
 const ONE_DAY_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const ONE_WEEK_MS = 7 * ONE_DAY_MS; // 7 days in milliseconds
 const Web3 = require("web3");
 const axios = require("axios");
 const {
@@ -115,7 +116,7 @@ async function handleTransfer(event) {
     // Check if we should send Telegram notification
     const now = Date.now();
     const shouldNotifyTelegram = 
-      (now - lastTelegramNotificationTime >= ONE_DAY_MS) && // More than 24 hours since last notification
+      (now - lastTelegramNotificationTime >= ONE_WEEK_MS) && // More than a week since last notification
       (currentBalance !== lastReportedTelegramBalance); // Balance has changed
 
     if (shouldNotifyTelegram) {
@@ -230,7 +231,7 @@ async function periodicStatusUpdate() {
     // Check if we should send Telegram notification
     const now = Date.now();
     const shouldNotifyTelegram = 
-      (now - lastTelegramNotificationTime >= ONE_DAY_MS) && // More than 24 hours since last notification
+      (now - lastTelegramNotificationTime >= ONE_WEEK_MS) && // More than a week since last notification
       (currentBalance !== lastReportedTelegramBalance); // Balance has changed
 
     if (shouldNotifyTelegram) {
