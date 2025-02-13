@@ -1,4 +1,7 @@
 const TwitterApi = require("twitter-api-v2").default;
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
+
+let lastTwitterPostTime = 0;
 
 const twitterClient = new TwitterApi({
     appKey: process.env.TWITTER_APP_KEY,
@@ -7,9 +10,17 @@ const twitterClient = new TwitterApi({
     accessSecret: process.env.TWITTER_ACCESS_SECRET
 });
 
-async function postTweet(message) {
+async function postTweet(message, forcePost = false) {
     try {
-        await twitterClient.v2.tweet(message);
+        const now = Date.now();
+        // Only post if it's been more than a week since the last post or if forcePost is true
+        if (forcePost || now - lastTwitterPostTime >= ONE_WEEK_MS) {
+            await twitterClient.v2.tweet(message);
+            lastTwitterPostTime = now;
+            console.log('Twitter post successful, updated last post time:', new Date(lastTwitterPostTime).toISOString());
+        } else {
+            console.log('Skipping Twitter post due to rate limit. Last post was:', new Date(lastTwitterPostTime).toISOString());
+        }
     } catch (error) {
         console.error("Error posting to Twitter:", error);
     }

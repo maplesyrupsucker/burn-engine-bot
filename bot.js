@@ -110,7 +110,7 @@ async function handleTransfer(event) {
         `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
     }
 
-    // Always post to Twitter in real-time
+    // Always post to Twitter with rate limiting
     await postTweet(message);
 
     // Check if we should send Telegram notification
@@ -225,7 +225,7 @@ async function periodicStatusUpdate() {
         `${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
     }
 
-    // Always post to Twitter in real-time
+    // Post to Twitter with rate limiting
     await postTweet(message);
 
     // Check if we should send Telegram notification
@@ -287,7 +287,7 @@ const handleTransferToBurn = async (event) => {
       // Post to all social media channels
       await Promise.all([
         handleTelegramPost(message),
-        postTweet(message),
+        postTweet(message, true), // Force post burns
         // Add other social media handlers as needed:
         // handleDiscordPost(message),
         // handleSlackPost(message),
@@ -621,7 +621,7 @@ async function monitorBuybacks(fromBlock, toBlock) {
             console.log('Posting buyback to social media...');
             await Promise.all([
               handleTelegramPost(message),
-              postTweet(message)
+              postTweet(message, true) // Force post buybacks
             ]).catch(error => {
               console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
               notifyError(`Error broadcasting buyback message: ${error.message}`);
@@ -646,3 +646,6 @@ setupTelegramCommands({
   fetchEngineBalance,
   handleTotalVerseBurnedCommand
 });
+
+// Monitor Events
+monitorEvents();
