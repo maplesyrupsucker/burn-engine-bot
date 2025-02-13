@@ -19,14 +19,14 @@ const CONFIG = {
   ETHERSCAN_BASE_URL: "https://etherscan.io/tx/", // Keep this for transaction links
 
   // Time Intervals (in milliseconds)
-  POLLING_INTERVAL: 30000, // 30 seconds
-  ERROR_RETRY_INTERVAL: 60000, // 1 minute
-  USD_RATE_UPDATE_INTERVAL: 3600000, // 1 hour
-  STATUS_UPDATE_INTERVAL: 43200000, // 12 hours
+  POLLING_INTERVAL: 300000, // 5 minutes (increased from 30 seconds)
+  ERROR_RETRY_INTERVAL: 120000, // 2 minutes (increased from 1 minute)
+  USD_RATE_UPDATE_INTERVAL: 3600000, // 1 hour (unchanged)
+  STATUS_UPDATE_INTERVAL: 43200000, // 12 hours (unchanged)
 
   // Retry Settings
   MAX_RETRIES: 3,
-  INITIAL_RETRY_DELAY: 1000, // 1 second
+  INITIAL_RETRY_DELAY: 5000, // 5 seconds (increased from 1 second)
 
   // Number Formatting
   NUMBER_FORMAT: {
