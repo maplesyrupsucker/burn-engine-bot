@@ -18,15 +18,28 @@ const CONFIG = {
   CIRCULATING_SUPPLY_API: "https://markets.api.bitcoin.com/coin/data/circulating?c=VERSE",
   ETHERSCAN_BASE_URL: "https://etherscan.io/tx/", // Keep this for transaction links
 
-  // Time Intervals (in milliseconds)
-  POLLING_INTERVAL: 300000, // 5 minutes (increased from 30 seconds)
-  ERROR_RETRY_INTERVAL: 120000, // 2 minutes (increased from 1 minute)
+  // Time Intervals (in milliseconds) - Reduced frequency to save API calls
+  POLLING_INTERVAL: 900000, // 15 minutes (increased from 5 minutes)
+  ERROR_RETRY_INTERVAL: 300000, // 5 minutes (increased from 2 minutes)
   USD_RATE_UPDATE_INTERVAL: 3600000, // 1 hour (unchanged)
   STATUS_UPDATE_INTERVAL: 43200000, // 12 hours (unchanged)
 
-  // Retry Settings
+  // Retry Settings - Better exponential backoff
   MAX_RETRIES: 3,
-  INITIAL_RETRY_DELAY: 5000, // 5 seconds (increased from 1 second)
+  INITIAL_RETRY_DELAY: 10000, // 10 seconds (increased from 5 seconds)
+  
+  // Rate Limiting Settings
+  REQUEST_THROTTLE_DELAY: 2000, // 2 seconds between API requests
+  PARALLEL_REQUEST_LIMIT: 2, // Maximum concurrent requests
+  BLOCK_BATCH_SIZE: 10, // Process blocks in smaller batches
+  
+  // Telegram Bot Rate Limiting
+  TELEGRAM_RATE_LIMIT: {
+    COMMANDS_PER_MINUTE: 5, // Max commands per user per minute
+    GLOBAL_COMMANDS_PER_MINUTE: 20, // Max total commands per minute
+    COOLDOWN_DURATION: 60000, // 1 minute cooldown for rate limited users
+    HEAVY_COMMAND_COOLDOWN: 300000, // 5 minutes for heavy commands like burns/buybacks
+  },
 
   // Number Formatting
   NUMBER_FORMAT: {

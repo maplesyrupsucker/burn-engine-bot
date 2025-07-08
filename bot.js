@@ -31,6 +31,77 @@ let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
 let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
 
+// Rate limiting tracking
+const userRateLimits = new Map(); // Track individual user rate limits
+const globalRateLimit = { count: 0, resetTime: Date.now() + 60000 }; // Global rate limit
+const activeRequests = new Set(); // Track active API requests
+
+// Throttling utility to limit concurrent API requests
+async function throttleRequest(requestFunc, isHeavy = false) {
+  // Wait for available slot
+  while (activeRequests.size >= CONFIG.PARALLEL_REQUEST_LIMIT) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  
+  const requestId = Date.now() + Math.random();
+  activeRequests.add(requestId);
+  
+  try {
+    const result = await requestFunc();
+    
+    // Add delay between requests
+    const delay = isHeavy ? CONFIG.REQUEST_THROTTLE_DELAY * 2 : CONFIG.REQUEST_THROTTLE_DELAY;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    return result;
+  } finally {
+    activeRequests.delete(requestId);
+  }
+}
+
+// Telegram rate limiting utilities
+function checkTelegramRateLimit(userId, isHeavyCommand = false) {
+  const now = Date.now();
+  
+  // Check global rate limit
+  if (now > globalRateLimit.resetTime) {
+    globalRateLimit.count = 0;
+    globalRateLimit.resetTime = now + 60000; // Reset every minute
+  }
+  
+  if (globalRateLimit.count >= CONFIG.TELEGRAM_RATE_LIMIT.GLOBAL_COMMANDS_PER_MINUTE) {
+    return { allowed: false, reason: "Global rate limit exceeded. Please try again later." };
+  }
+  
+  // Check user rate limit
+  const userLimit = userRateLimits.get(userId) || { count: 0, resetTime: now + 60000, lastHeavyCommand: 0 };
+  
+  if (now > userLimit.resetTime) {
+    userLimit.count = 0;
+    userLimit.resetTime = now + 60000;
+  }
+  
+  // Check heavy command cooldown
+  if (isHeavyCommand && (now - userLimit.lastHeavyCommand) < CONFIG.TELEGRAM_RATE_LIMIT.HEAVY_COMMAND_COOLDOWN) {
+    const waitTime = Math.ceil((CONFIG.TELEGRAM_RATE_LIMIT.HEAVY_COMMAND_COOLDOWN - (now - userLimit.lastHeavyCommand)) / 1000);
+    return { allowed: false, reason: `Please wait ${waitTime} seconds before using this command again.` };
+  }
+  
+  if (userLimit.count >= CONFIG.TELEGRAM_RATE_LIMIT.COMMANDS_PER_MINUTE) {
+    return { allowed: false, reason: "You've exceeded the rate limit. Please try again in a minute." };
+  }
+  
+  // Update counters
+  userLimit.count++;
+  globalRateLimit.count++;
+  if (isHeavyCommand) {
+    userLimit.lastHeavyCommand = now;
+  }
+  userRateLimits.set(userId, userLimit);
+  
+  return { allowed: true };
+}
+
 // Fetch USD Rate
 async function fetchVerseUsdRate() {
   try {
@@ -85,9 +156,9 @@ async function handleTransfer(event) {
     const valueWei = event.returnValues.value;
     const valueEth = Number(web3.utils.fromWei(valueWei, "ether"));
 
-    const burnEngineBalanceWei = await verseTokenContract.methods
-      .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
-      .call();
+    const burnEngineBalanceWei = await throttleRequest(() => 
+      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
+    );
     const currentBalance = burnEngineBalanceWei.toString();
     lastKnownBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
 
@@ -139,11 +210,23 @@ async function retryRequest(asyncFunc, maxRetries = CONFIG.MAX_RETRIES, initialD
       return await asyncFunc();
     } catch (error) {
       retries++;
+      
+      // Check if it's a rate limiting error
+      const isRateLimited = error.message && (
+        error.message.includes("Too Many Requests") ||
+        error.message.includes("rate limit") ||
+        error.message.includes("429")
+      );
+      
       if (retries === maxRetries) {
         throw error;
       }
-      const delay = initialDelay * Math.pow(2, retries - 1);
-      console.warn(`Request failed. Retrying in ${delay}ms...`);
+      
+      // Use longer delays for rate limit errors
+      const baseDelay = isRateLimited ? initialDelay * 3 : initialDelay;
+      const delay = baseDelay * Math.pow(2, retries - 1);
+      
+      console.warn(`Request failed (${error.message}). Retrying in ${delay}ms... (attempt ${retries}/${maxRetries})`);
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
@@ -163,17 +246,33 @@ async function monitorEvents() {
     // Start monitoring loop
     setInterval(async () => {
       try {
-        const latestBlock = await retryRequest(() => web3.eth.getBlockNumber());
+        const latestBlock = await throttleRequest(() => web3.eth.getBlockNumber());
         const fromBlock = lastProcessedBlock + 1;
 
         if (fromBlock <= latestBlock) {
-          console.log(`Processing blocks ${fromBlock} to ${latestBlock}`);
+          // Process blocks in smaller batches to reduce API load
+          const totalBlocks = latestBlock - fromBlock + 1;
+          const batchSize = Math.min(CONFIG.BLOCK_BATCH_SIZE, totalBlocks);
           
-          await Promise.all([
-            monitorBurnEngineTransfers(fromBlock, latestBlock),
-            monitorTokenBurns(fromBlock, latestBlock),
-            monitorBuybacks(fromBlock, latestBlock)
-          ]);
+          console.log(`Processing ${totalBlocks} blocks in batches of ${batchSize}`);
+          
+          for (let currentBlock = fromBlock; currentBlock <= latestBlock; currentBlock += batchSize) {
+            const batchEndBlock = Math.min(currentBlock + batchSize - 1, latestBlock);
+            
+            console.log(`Processing batch: blocks ${currentBlock} to ${batchEndBlock}`);
+            
+            // Process sequentially instead of in parallel to reduce API load
+            await throttleRequest(() => monitorBurnEngineTransfers(currentBlock, batchEndBlock));
+            await throttleRequest(() => monitorTokenBurns(currentBlock, batchEndBlock));
+            
+            // Only monitor buybacks if enabled
+            if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+              await throttleRequest(() => monitorBuybacks(currentBlock, batchEndBlock), true);
+            }
+            
+            // Add a small delay between batches
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
 
           lastProcessedBlock = latestBlock;
           console.log(`Updated last processed block to ${lastProcessedBlock}`);
@@ -201,9 +300,9 @@ function getRandomEmptyBalanceMessage() {
 async function periodicStatusUpdate() {
   try {
     await fetchVerseUsdRate();
-    const burnEngineBalanceWei = await verseTokenContract.methods
-      .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
-      .call();
+    const burnEngineBalanceWei = await throttleRequest(() => 
+      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
+    );
     const currentBalance = burnEngineBalanceWei.toString();
     const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
     
@@ -271,9 +370,9 @@ const handleTransferToBurn = async (event) => {
       const etherscanUrl = `${CONFIG.ETHERSCAN_BASE_URL}${event.transactionHash}`;
 
       // Get burn engine balance for context
-      const burnEngineBalanceWei = await verseTokenContract.methods
-        .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
-        .call();
+      const burnEngineBalanceWei = await throttleRequest(() => 
+        verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
+      );
       const burnEngineBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
       const formattedBurnEngineBalance = formatAmount(burnEngineBalanceEth);
 
@@ -326,11 +425,19 @@ async function monitorTokenBurns(fromBlock, toBlock) {
   }
 }
 
-// Function to fetch last five burns
-async function fetchLastFiveBurns() {
+// Function to fetch last five burns (with rate limiting check)
+async function fetchLastFiveBurns(userId = null) {
   try {
-    // Get current block number
-    const latestBlock = await web3.eth.getBlockNumber();
+    // Check rate limiting if user ID provided
+    if (userId) {
+      const rateLimitCheck = checkTelegramRateLimit(userId, true);
+      if (!rateLimitCheck.allowed) {
+        throw new Error(rateLimitCheck.reason);
+      }
+    }
+
+    // Get current block number with throttling
+    const latestBlock = await throttleRequest(() => web3.eth.getBlockNumber());
     // Look back ~1 month (about 200,000 blocks)
     const lookbackBlocks = 200000;
     const fromBlock = Math.max(CONFIG.START_BLOCK, latestBlock - lookbackBlocks);
@@ -341,11 +448,13 @@ async function fetchLastFiveBurns() {
 
     console.log(`Fetching burns from block ${fromBlock} to ${latestBlock}`); // Debug log
 
-    const events = await verseTokenContract.getPastEvents('Transfer', {
-      fromBlock: fromBlockHex,
-      toBlock: latestBlockHex,
-      filter: { to: CONFIG.NULL_ADDRESS }
-    });
+    const events = await throttleRequest(() => 
+      verseTokenContract.getPastEvents('Transfer', {
+        fromBlock: fromBlockHex,
+        toBlock: latestBlockHex,
+        filter: { to: CONFIG.NULL_ADDRESS }
+      }), true
+    );
 
     const lastFiveBurns = events.slice(-5).reverse();
     if (lastFiveBurns.length === 0) {
@@ -362,8 +471,8 @@ async function fetchLastFiveBurns() {
       const formattedUsd = (amountEth * verseUsdRate).toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
       const txHash = event.transactionHash;
       
-      // Add block number and date if available
-      const block = await web3.eth.getBlock(event.blockNumber);
+      // Add block number and date if available - throttle this request too
+      const block = await throttleRequest(() => web3.eth.getBlock(event.blockNumber));
       const date = block ? new Date(block.timestamp * 1000).toLocaleString() : 'Unknown date';
       
       message += `${CONFIG.EMOJIS.FIRE} ${formattedVerse} VERSE (~$${formattedUsd} USD)\n`;
@@ -380,13 +489,21 @@ async function fetchLastFiveBurns() {
   }
 }
 
-// Function to fetch engine balance
-async function fetchEngineBalance() {
+// Function to fetch engine balance (with rate limiting check)
+async function fetchEngineBalance(userId = null) {
   try {
+    // Check rate limiting if user ID provided
+    if (userId) {
+      const rateLimitCheck = checkTelegramRateLimit(userId, false);
+      if (!rateLimitCheck.allowed) {
+        throw new Error(rateLimitCheck.reason);
+      }
+    }
+
     await fetchVerseUsdRate();
-    const burnEngineBalanceWei = await verseTokenContract.methods
-      .balanceOf(CONFIG.BURN_ENGINE_ADDRESS)
-      .call();
+    const burnEngineBalanceWei = await throttleRequest(() => 
+      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
+    );
     const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
     
     const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
@@ -399,18 +516,28 @@ async function fetchEngineBalance() {
   }
 }
 
-// Function to handle total VERSE burned command
-async function handleTotalVerseBurnedCommand(includePercentage = true) {
+// Function to handle total VERSE burned command (with rate limiting check)
+async function handleTotalVerseBurnedCommand(includePercentage = true, userId = null) {
   try {
+    // Check rate limiting if user ID provided
+    if (userId) {
+      const rateLimitCheck = checkTelegramRateLimit(userId, true);
+      if (!rateLimitCheck.allowed) {
+        throw new Error(rateLimitCheck.reason);
+      }
+    }
+
     // Fetch USD rate first
     await fetchVerseUsdRate();
     
-    // Get all Transfer events to the null address (burns)
-    const events = await verseTokenContract.getPastEvents('Transfer', {
-      fromBlock: CONFIG.START_BLOCK,
-      toBlock: 'latest',
-      filter: { to: CONFIG.NULL_ADDRESS }
-    });
+    // Get all Transfer events to the null address (burns) with throttling
+    const events = await throttleRequest(() => 
+      verseTokenContract.getPastEvents('Transfer', {
+        fromBlock: CONFIG.START_BLOCK,
+        toBlock: 'latest',
+        filter: { to: CONFIG.NULL_ADDRESS }
+      }), true
+    );
     
     // Sum up all transfers to null address
     const totalBurnedWei = events.reduce((total, event) => {
@@ -572,12 +699,12 @@ async function fetchAllBuyBacks() {
   }
 }
 
-// Monitor buybacks using Web3
+// Monitor buybacks using Web3 (optimized with throttling)
 async function monitorBuybacks(fromBlock, toBlock) {
   try {
     console.log(`Monitoring buybacks from block ${fromBlock} to ${toBlock}...`);
 
-    const events = await retryRequest(async () => {
+    const events = await throttleRequest(async () => {
       return await verseTokenContract.getPastEvents('Transfer', {
         fromBlock: fromBlock,
         toBlock: toBlock,
@@ -585,53 +712,62 @@ async function monitorBuybacks(fromBlock, toBlock) {
           from: CONFIG.LIQUIDITY_MANAGER_ADDRESS
         }
       });
-    });
+    }, true);
 
-    for (const event of events) {
-      try {
-        await new Promise(resolve => setTimeout(resolve, 100)); // Add delay between requests
-        
-        const tx = await retryRequest(async () => {
-          return await web3.eth.getTransaction(event.transactionHash);
-        });
+    // Process events in smaller batches to reduce API load
+    const batchSize = 3;
+    for (let i = 0; i < events.length; i += batchSize) {
+      const eventBatch = events.slice(i, i + batchSize);
+      
+      for (const event of eventBatch) {
+        try {
+          const tx = await throttleRequest(async () => {
+            return await web3.eth.getTransaction(event.transactionHash);
+          }, true);
 
-        if (tx && tx.value !== '0') {
-          const ethAmount = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
-          await fetchVerseUsdRate();
-          const usdAmount = ethAmount * verseUsdRate;
+          if (tx && tx.value !== '0') {
+            const ethAmount = parseFloat(web3.utils.fromWei(tx.value, 'ether'));
+            await fetchVerseUsdRate();
+            const usdAmount = ethAmount * verseUsdRate;
 
-          const message = 
-            `${CONFIG.EMOJIS.ROCKET} New VERSE Buyback Detected!\n` +
-            `${CONFIG.EMOJIS.MONEY} Amount: ${ethAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
-            `(~$${usdAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n` +
-            `${CONFIG.ETHERSCAN_BASE_URL}${tx.hash}\n\n` +
-            `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
+            const message = 
+              `${CONFIG.EMOJIS.ROCKET} New VERSE Buyback Detected!\n` +
+              `${CONFIG.EMOJIS.MONEY} Amount: ${ethAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} ETH ` +
+              `(~$${usdAmount.toLocaleString("en-US", CONFIG.NUMBER_FORMAT)} USD)\n` +
+              `${CONFIG.ETHERSCAN_BASE_URL}${tx.hash}\n\n` +
+              `${CONFIG.EMOJIS.GLOBE} Learn more: https://verse.bitcoin.com/burn/`;
 
-          // Always log the buyback detection
-          console.log('Buyback detected:', {
-            hash: tx.hash,
-            block: event.blockNumber,
-            ethAmount,
-            usdAmount,
-            tracking_enabled: CONFIG.ENABLE_BUYBACK_TRACKING
-          });
-          console.log('Message that would be posted:', message);
-
-          if (CONFIG.ENABLE_BUYBACK_TRACKING) {
-            console.log('Posting buyback to social media...');
-            await Promise.all([
-              handleTelegramPost(message),
-              postTweet(message, true) // Force post buybacks
-            ]).catch(error => {
-              console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
-              notifyError(`Error broadcasting buyback message: ${error.message}`);
+            // Always log the buyback detection
+            console.log('Buyback detected:', {
+              hash: tx.hash,
+              block: event.blockNumber,
+              ethAmount,
+              usdAmount,
+              tracking_enabled: CONFIG.ENABLE_BUYBACK_TRACKING
             });
-          } else {
-            console.log('Buyback tracking disabled - skipping social media posts');
+            console.log('Message that would be posted:', message);
+
+            if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+              console.log('Posting buyback to social media...');
+              await Promise.all([
+                handleTelegramPost(message),
+                postTweet(message, true) // Force post buybacks
+              ]).catch(error => {
+                console.error(`${CONFIG.ERROR_PREFIX}broadcasting buyback message:`, error);
+                notifyError(`Error broadcasting buyback message: ${error.message}`);
+              });
+            } else {
+              console.log('Buyback tracking disabled - skipping social media posts');
+            }
           }
+        } catch (error) {
+          console.error(`Error processing transaction ${event.transactionHash}:`, error);
         }
-      } catch (error) {
-        console.error(`Error processing transaction ${event.transactionHash}:`, error);
+      }
+      
+      // Add delay between batches
+      if (i + batchSize < events.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
   } catch (error) {
@@ -640,11 +776,12 @@ async function monitorBuybacks(fromBlock, toBlock) {
   }
 }
 
-// Initialize Telegram commands
+// Initialize Telegram commands with rate limiting
 setupTelegramCommands({
   fetchLastFiveBurns,
   fetchEngineBalance,
-  handleTotalVerseBurnedCommand
+  handleTotalVerseBurnedCommand,
+  checkTelegramRateLimit
 });
 
 // Monitor Events
