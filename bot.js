@@ -31,6 +31,10 @@ let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
 let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
 
+// Daily auto-post tracking for Telegram
+let dailyAutoPostCount = 0;
+let dailyPostResetTime = Date.now() + CONFIG.TELEGRAM_AUTO_POST_LIMIT.DAY_RESET_INTERVAL;
+
 // Rate limiting tracking
 const userRateLimits = new Map(); // Track individual user rate limits
 const globalRateLimit = { count: 0, resetTime: Date.now() + 60000 }; // Global rate limit
@@ -186,15 +190,25 @@ async function handleTransfer(event) {
 
     // Check if we should send Telegram notification
     const now = Date.now();
+    
+    // Reset daily counter if 24 hours have passed
+    if (now > dailyPostResetTime) {
+      dailyAutoPostCount = 0;
+      dailyPostResetTime = now + CONFIG.TELEGRAM_AUTO_POST_LIMIT.DAY_RESET_INTERVAL;
+    }
+    
     const shouldNotifyTelegram = 
       (now - lastTelegramNotificationTime >= ONE_WEEK_MS) && // More than a week since last notification
-      (currentBalance !== lastReportedTelegramBalance); // Balance has changed
+      (currentBalance !== lastReportedTelegramBalance) && // Balance has changed
+      (lastKnownBalanceEth > 0) && // Don't auto-post when balance is 0
+      (dailyAutoPostCount < CONFIG.TELEGRAM_AUTO_POST_LIMIT.MAX_POSTS_PER_DAY); // Daily limit check
 
     if (shouldNotifyTelegram) {
       await handleTelegramPost(message);
       // Update Telegram tracking variables
       lastTelegramNotificationTime = now;
       lastReportedTelegramBalance = currentBalance;
+      dailyAutoPostCount++; // Increment daily counter
     }
 
   } catch (error) {
@@ -329,15 +343,25 @@ async function periodicStatusUpdate() {
 
     // Check if we should send Telegram notification
     const now = Date.now();
+    
+    // Reset daily counter if 24 hours have passed
+    if (now > dailyPostResetTime) {
+      dailyAutoPostCount = 0;
+      dailyPostResetTime = now + CONFIG.TELEGRAM_AUTO_POST_LIMIT.DAY_RESET_INTERVAL;
+    }
+    
     const shouldNotifyTelegram = 
       (now - lastTelegramNotificationTime >= ONE_WEEK_MS) && // More than a week since last notification
-      (currentBalance !== lastReportedTelegramBalance); // Balance has changed
+      (currentBalance !== lastReportedTelegramBalance) && // Balance has changed
+      (balanceEth > 0) && // Don't auto-post when balance is 0
+      (dailyAutoPostCount < CONFIG.TELEGRAM_AUTO_POST_LIMIT.MAX_POSTS_PER_DAY); // Daily limit check
 
     if (shouldNotifyTelegram) {
       await handleTelegramPost(message);
       // Update Telegram tracking variables
       lastTelegramNotificationTime = now;
       lastReportedTelegramBalance = currentBalance;
+      dailyAutoPostCount++; // Increment daily counter
     }
 
   } catch (error) {

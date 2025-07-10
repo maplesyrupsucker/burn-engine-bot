@@ -35,10 +35,16 @@ const CONFIG = {
   
   // Telegram Bot Rate Limiting
   TELEGRAM_RATE_LIMIT: {
-    COMMANDS_PER_MINUTE: 5, // Max commands per user per minute
-    GLOBAL_COMMANDS_PER_MINUTE: 20, // Max total commands per minute
-    COOLDOWN_DURATION: 60000, // 1 minute cooldown for rate limited users
-    HEAVY_COMMAND_COOLDOWN: 300000, // 5 minutes for heavy commands like burns/buybacks
+    COMMANDS_PER_MINUTE: 3, // Max commands per user per minute
+    GLOBAL_COMMANDS_PER_MINUTE: 3, // Max total commands per minute across all users
+    COOLDOWN_DURATION: 300000, // 5 minutes cooldown for rate limited users
+    HEAVY_COMMAND_COOLDOWN: 900000, // 15 minutes for heavy commands like burns/buybacks
+  },
+
+  // Auto-posting Limits
+  TELEGRAM_AUTO_POST_LIMIT: {
+    MAX_POSTS_PER_DAY: 2, // Maximum auto-posts per day for non-zero balance
+    DAY_RESET_INTERVAL: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
   },
 
   // Number Formatting

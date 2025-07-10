@@ -105,9 +105,11 @@ function setupTelegramCommands({
             "/totalverseburned - Show total VERSE burned\n" +
             "/help - Show this help message\n\n" +
             "⏱️ *Rate Limits:*\n" +
-            "• 5 commands per minute per user\n" +
-            "• Heavy commands have 5 minute cooldown\n" +
-            "• Global limit: 20 commands per minute\n\n" +
+            "• 3 commands per minute per user\n" +
+            "• Heavy commands have 15 minute cooldown\n" +
+            "• Global limit: 3 commands per minute\n" +
+            "• Rate limited users: 5 minute cooldown\n" +
+            "• Auto-posts: Max 2 per day when balance > 0\n\n" +
             "🔥 Learn more: https://verse.bitcoin.com/burn/";
         
         await bot.sendMessage(chatId, helpMessage, { parse_mode: "Markdown" });
