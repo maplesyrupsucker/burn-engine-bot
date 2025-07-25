@@ -31,6 +31,12 @@ let lastProcessedBlock = 0;
 let lastKnownBalanceEth = 0;
 let lastReportedTelegramBalance = ""; // Initialize the variable to track the last reported balance on Telegram
 
+// Simple caching to reduce API calls
+let balanceCache = { value: null, timestamp: 0, ttl: 300000 }; // 5 minute cache
+let blockNumberCache = { value: null, timestamp: 0, ttl: 60000 }; // 1 minute cache
+let burnsCache = { value: null, timestamp: 0, ttl: CONFIG.HEAVY_OPERATION_CACHE_TTL }; // 24 hour cache for expensive burns lookup
+let totalBurnsCache = { value: null, timestamp: 0, ttl: CONFIG.HEAVY_OPERATION_CACHE_TTL }; // 24 hour cache for total burns
+
 // Daily auto-post tracking for Telegram
 let dailyAutoPostCount = 0;
 let dailyPostResetTime = Date.now() + CONFIG.TELEGRAM_AUTO_POST_LIMIT.DAY_RESET_INTERVAL;
@@ -39,6 +45,32 @@ let dailyPostResetTime = Date.now() + CONFIG.TELEGRAM_AUTO_POST_LIMIT.DAY_RESET_
 const userRateLimits = new Map(); // Track individual user rate limits
 const globalRateLimit = { count: 0, resetTime: Date.now() + 60000 }; // Global rate limit
 const activeRequests = new Set(); // Track active API requests
+
+// Caching utilities to reduce API calls
+async function getCachedBalance() {
+  const now = Date.now();
+  if (balanceCache.value && (now - balanceCache.timestamp) < balanceCache.ttl) {
+    return balanceCache.value;
+  }
+  
+  const balance = await throttleRequest(() => 
+    verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
+  );
+  
+  balanceCache = { value: balance, timestamp: now, ttl: balanceCache.ttl };
+  return balance;
+}
+
+async function getCachedBlockNumber() {
+  const now = Date.now();
+  if (blockNumberCache.value && (now - blockNumberCache.timestamp) < blockNumberCache.ttl) {
+    return blockNumberCache.value;
+  }
+  
+  const blockNumber = await throttleRequest(() => web3.eth.getBlockNumber());
+  blockNumberCache = { value: blockNumber, timestamp: now, ttl: blockNumberCache.ttl };
+  return blockNumber;
+}
 
 // Throttling utility to limit concurrent API requests
 async function throttleRequest(requestFunc, isHeavy = false) {
@@ -160,9 +192,7 @@ async function handleTransfer(event) {
     const valueWei = event.returnValues.value;
     const valueEth = Number(web3.utils.fromWei(valueWei, "ether"));
 
-    const burnEngineBalanceWei = await throttleRequest(() => 
-      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
-    );
+    const burnEngineBalanceWei = await getCachedBalance();
     const currentBalance = burnEngineBalanceWei.toString();
     lastKnownBalanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
 
@@ -260,7 +290,7 @@ async function monitorEvents() {
     // Start monitoring loop
     setInterval(async () => {
       try {
-        const latestBlock = await throttleRequest(() => web3.eth.getBlockNumber());
+        const latestBlock = await getCachedBlockNumber();
         const fromBlock = lastProcessedBlock + 1;
 
         if (fromBlock <= latestBlock) {
@@ -275,12 +305,16 @@ async function monitorEvents() {
             
             console.log(`Processing batch: blocks ${currentBlock} to ${batchEndBlock}`);
             
-            // Process sequentially instead of in parallel to reduce API load
-            await throttleRequest(() => monitorBurnEngineTransfers(currentBlock, batchEndBlock));
+            // Skip expensive operations in emergency mode
+            if (!CONFIG.EMERGENCY_MODE) {
+              await throttleRequest(() => monitorBurnEngineTransfers(currentBlock, batchEndBlock));
+            }
+            
+            // Always monitor burns (most important)
             await throttleRequest(() => monitorTokenBurns(currentBlock, batchEndBlock));
             
-            // Only monitor buybacks if enabled
-            if (CONFIG.ENABLE_BUYBACK_TRACKING) {
+            // Only monitor buybacks if enabled and not in minimal mode
+            if (CONFIG.ENABLE_BUYBACK_TRACKING && !CONFIG.MINIMAL_MODE && !CONFIG.EMERGENCY_MODE) {
               await throttleRequest(() => monitorBuybacks(currentBlock, batchEndBlock), true);
             }
             
@@ -312,11 +346,15 @@ function getRandomEmptyBalanceMessage() {
 
 // Update periodicStatusUpdate to handle empty balance
 async function periodicStatusUpdate() {
+  // Skip status updates in minimal or emergency mode to save API calls
+  if (CONFIG.MINIMAL_MODE || CONFIG.EMERGENCY_MODE) {
+    console.log('Skipping status update due to minimal/emergency mode');
+    return;
+  }
+  
   try {
     await fetchVerseUsdRate();
-    const burnEngineBalanceWei = await throttleRequest(() => 
-      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
-    );
+    const burnEngineBalanceWei = await getCachedBalance();
     const currentBalance = burnEngineBalanceWei.toString();
     const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
     
@@ -460,6 +498,15 @@ async function fetchLastFiveBurns(userId = null) {
       }
     }
 
+    // Check cache first - only do expensive lookup once per 24 hours
+    const now = Date.now();
+    if (CONFIG.ENABLE_HEAVY_OPERATION_CACHE && burnsCache.value && (now - burnsCache.timestamp) < burnsCache.ttl) {
+      console.log('✅ Returning cached burns data (avoiding expensive API calls)');
+      return burnsCache.value;
+    }
+    
+    console.log('🔄 Performing expensive burns lookup (not cached or cache expired)...');
+
     // Get current block number with throttling
     const latestBlock = await throttleRequest(() => web3.eth.getBlockNumber());
     // Look back ~1 month (about 200,000 blocks)
@@ -506,6 +553,13 @@ async function fetchLastFiveBurns(userId = null) {
     
     // Add burn page link at the end
     message += `\n${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    
+    // Cache the result for 24 hours to avoid expensive API calls
+    if (CONFIG.ENABLE_HEAVY_OPERATION_CACHE) {
+      burnsCache = { value: message, timestamp: now, ttl: burnsCache.ttl };
+      console.log('💾 Cached burns data for 24 hours');
+    }
+    
     return message;
   } catch (error) {
     console.error("Error fetching burns:", error);
@@ -525,9 +579,7 @@ async function fetchEngineBalance(userId = null) {
     }
 
     await fetchVerseUsdRate();
-    const burnEngineBalanceWei = await throttleRequest(() => 
-      verseTokenContract.methods.balanceOf(CONFIG.BURN_ENGINE_ADDRESS).call()
-    );
+    const burnEngineBalanceWei = await getCachedBalance();
     const balanceEth = Number(web3.utils.fromWei(burnEngineBalanceWei, "ether"));
     
     const formattedBalance = balanceEth.toLocaleString("en-US", CONFIG.NUMBER_FORMAT);
@@ -550,6 +602,15 @@ async function handleTotalVerseBurnedCommand(includePercentage = true, userId = 
         throw new Error(rateLimitCheck.reason);
       }
     }
+
+    // Check cache first - only do expensive lookup once per 24 hours
+    const now = Date.now();
+    if (CONFIG.ENABLE_HEAVY_OPERATION_CACHE && totalBurnsCache.value && (now - totalBurnsCache.timestamp) < totalBurnsCache.ttl) {
+      console.log('✅ Returning cached total burns data (avoiding expensive API calls)');
+      return totalBurnsCache.value;
+    }
+    
+    console.log('🔄 Performing expensive total burns lookup (not cached or cache expired)...');
 
     // Fetch USD rate first
     await fetchVerseUsdRate();
@@ -584,6 +645,12 @@ async function handleTotalVerseBurnedCommand(includePercentage = true, userId = 
     }
     
     message += `\n\n${CONFIG.EMOJIS.GLOBE} Learn more about VERSE Burns: https://verse.bitcoin.com/burn/`;
+    
+    // Cache the result for 24 hours to avoid expensive API calls
+    if (CONFIG.ENABLE_HEAVY_OPERATION_CACHE) {
+      totalBurnsCache = { value: message, timestamp: now, ttl: totalBurnsCache.ttl };
+      console.log('💾 Cached total burns data for 24 hours');
+    }
     
     return message;
   } catch (error) {

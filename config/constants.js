@@ -19,19 +19,23 @@ const CONFIG = {
   ETHERSCAN_BASE_URL: "https://etherscan.io/tx/", // Keep this for transaction links
 
   // Time Intervals (in milliseconds) - Reduced frequency to save API calls
-  POLLING_INTERVAL: 900000, // 15 minutes (increased from 5 minutes)
-  ERROR_RETRY_INTERVAL: 300000, // 5 minutes (increased from 2 minutes)
-  USD_RATE_UPDATE_INTERVAL: 3600000, // 1 hour (unchanged)
-  STATUS_UPDATE_INTERVAL: 43200000, // 12 hours (unchanged)
+  POLLING_INTERVAL: 3600000, // 1 hour (increased from 15 minutes to save API calls)
+  ERROR_RETRY_INTERVAL: 600000, // 10 minutes (increased from 5 minutes)
+  USD_RATE_UPDATE_INTERVAL: 7200000, // 2 hours (increased from 1 hour)
+  STATUS_UPDATE_INTERVAL: 86400000, // 24 hours (increased from 12 hours)
 
   // Retry Settings - Better exponential backoff
   MAX_RETRIES: 3,
   INITIAL_RETRY_DELAY: 10000, // 10 seconds (increased from 5 seconds)
   
   // Rate Limiting Settings
-  REQUEST_THROTTLE_DELAY: 2000, // 2 seconds between API requests
-  PARALLEL_REQUEST_LIMIT: 2, // Maximum concurrent requests
-  BLOCK_BATCH_SIZE: 10, // Process blocks in smaller batches
+  REQUEST_THROTTLE_DELAY: 5000, // 5 seconds between API requests (increased from 2 seconds)
+  PARALLEL_REQUEST_LIMIT: 1, // Maximum concurrent requests (reduced from 2)
+  BLOCK_BATCH_SIZE: 5, // Process blocks in smaller batches (reduced from 10)
+  
+  // Heavy Operation Caching (to prevent expensive historical lookups)
+  HEAVY_OPERATION_CACHE_TTL: 86400000, // 24 hours for burns/total data (in milliseconds)
+  ENABLE_HEAVY_OPERATION_CACHE: true, // Set to false to disable caching for testing
   
   // Telegram Bot Rate Limiting
   TELEGRAM_RATE_LIMIT: {
@@ -63,6 +67,8 @@ const CONFIG = {
 
   // Feature Flags
   ENABLE_BUYBACK_TRACKING: false, // Toggle for buyback tracking
+  EMERGENCY_MODE: false, // Disable all monitoring except burns when true
+  MINIMAL_MODE: false, // Only monitor burns, disable balance checks and status updates
 
   // Message Templates
   BURN_ENGINE_PROMPT: "🚀 Ignite the $Verse Burn Engine with 10,000 $VERSE at https://verse.bitcoin.com/burn and set all $VERSE ablaze!",
