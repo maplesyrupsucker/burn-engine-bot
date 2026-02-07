@@ -3,7 +3,6 @@ const Web3 = require("web3");
 const TelegramBot = require("node-telegram-bot-api");
 const axios = require("axios");
 
-const infuraUrl = process.env.INFURA_URL;
 const botToken = process.env.TELEGRAM_BOT_TOKEN;
 const chatIds = process.env.TELEGRAM_CHAT_IDS.split(",");
 const flamethrowerGifUrl =
@@ -11,32 +10,78 @@ const flamethrowerGifUrl =
 const engineGifUrl =
   "https://i.imgflip.com/8ef4jd.gif";
 
-// Multiple RPC providers to distribute load and allow cooloff
-// Infura is primary for polling, public RPCs used for expensive historical queries
+// 100% FREE public RPC providers - no Infura needed
 const RPC_PROVIDERS = [
-  infuraUrl, // Primary - Infura
   "https://eth.llamarpc.com",
   "https://rpc.ankr.com/eth",
   "https://ethereum.publicnode.com",
   "https://1rpc.io/eth",
+  "https://eth.drpc.org",
+  "https://rpc.builder0x69.io",
 ];
 let currentRpcIndex = 0;
+let failedProviders = new Set(); // Track temporarily failed providers
 
-// Primary web3 instance (Infura for polling)
-const web3 = new Web3(new Web3.providers.HttpProvider(infuraUrl));
-const bot = new TelegramBot(botToken, { polling: true });
-
-// Get next RPC provider (round-robin rotation for expensive queries)
+// Get next working RPC provider (round-robin with failover)
 const getNextRpcProvider = () => {
-  currentRpcIndex = (currentRpcIndex + 1) % RPC_PROVIDERS.length;
-  return RPC_PROVIDERS[currentRpcIndex];
+  const startIndex = currentRpcIndex;
+  do {
+    currentRpcIndex = (currentRpcIndex + 1) % RPC_PROVIDERS.length;
+    const provider = RPC_PROVIDERS[currentRpcIndex];
+    if (!failedProviders.has(provider)) {
+      return provider;
+    }
+  } while (currentRpcIndex !== startIndex);
+  
+  // All providers failed - reset and try again
+  console.log("All RPC providers failed, resetting...");
+  failedProviders.clear();
+  return RPC_PROVIDERS[0];
 };
 
-// Create web3 instance with rotated provider for expensive queries
-const getRotatedWeb3 = () => {
+// Mark provider as failed (will be retried after cooldown)
+const markProviderFailed = (provider) => {
+  failedProviders.add(provider);
+  console.log(`Marked RPC provider as failed: ${provider.substring(0, 30)}...`);
+  // Reset failed status after 5 minutes
+  setTimeout(() => {
+    failedProviders.delete(provider);
+    console.log(`RPC provider back in rotation: ${provider.substring(0, 30)}...`);
+  }, 5 * 60 * 1000);
+};
+
+// Create web3 instance with current provider
+const createWeb3 = () => {
   const provider = getNextRpcProvider();
   console.log(`Using RPC provider: ${provider.substring(0, 30)}...`);
-  return new Web3(new Web3.providers.HttpProvider(provider));
+  return { web3: new Web3(new Web3.providers.HttpProvider(provider)), provider };
+};
+
+// Primary web3 instance (uses free public RPC)
+let { web3, provider: currentProvider } = createWeb3();
+const bot = new TelegramBot(botToken, { polling: true });
+
+// Create web3 instance with rotated provider for queries
+const getRotatedWeb3 = () => {
+  return createWeb3().web3;
+};
+
+// Execute RPC call with automatic failover
+const withFailover = async (fn, maxRetries = 3) => {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastError = e;
+      console.error(`RPC call failed (attempt ${i + 1}/${maxRetries}): ${e.message}`);
+      markProviderFailed(currentProvider);
+      const newInstance = createWeb3();
+      web3 = newInstance.web3;
+      currentProvider = newInstance.provider;
+    }
+  }
+  throw lastError;
 };
 
 const verseTokenAddress = "0x249cA82617eC3DfB2589c4c17ab7EC9765350a18";
@@ -61,17 +106,18 @@ let lastProcessedBlock = 0;
 let lastBurnEventBlock = 0; // Track when last burn happened for cache invalidation
 
 // Cache configuration (in milliseconds)
-// Longer TTLs since historical data doesn't change - invalidate on new burns
+// Extended TTLs - burns are rare events, historical data changes slowly
 const CACHE_TTL = {
-  USD_RATE: 5 * 60 * 1000,        // 5 minutes
-  TOTAL_BURNED: 60 * 60 * 1000,   // 60 minutes (invalidated on new burn)
-  LAST_BURNS: 60 * 60 * 1000,     // 60 minutes (invalidated on new burn)
-  CIRCULATING: 30 * 60 * 1000,    // 30 minutes
+  USD_RATE: 10 * 60 * 1000,       // 10 minutes
+  TOTAL_BURNED: 4 * 60 * 60 * 1000,   // 4 hours (invalidated on new burn)
+  LAST_BURNS: 4 * 60 * 60 * 1000,     // 4 hours (invalidated on new burn)
+  CIRCULATING: 2 * 60 * 60 * 1000,    // 2 hours
 };
 
 // Polling interval (in milliseconds)
-const POLL_INTERVAL = 60000;      // 60 seconds (reduced from 30s)
-const ERROR_RETRY_INTERVAL = 120000; // 2 minutes on error
+// Burns are rare - checking every 5 minutes is plenty
+const POLL_INTERVAL = 5 * 60 * 1000;  // 5 minutes
+const ERROR_RETRY_INTERVAL = 10 * 60 * 1000; // 10 minutes on error
 
 // Cache storage
 const cache = {
@@ -129,18 +175,23 @@ const formatAmount = (verseAmount) => {
 
 const initialize = async () => {
   try {
-    const balanceWei = await verseTokenContract.methods
-      .balanceOf(burnEngineAddress)
-      .call();
+    console.log("🚀 Burn Engine Bot starting (100% free RPCs, no Infura)...");
+    console.log(`📊 Polling interval: ${POLL_INTERVAL / 1000}s, Cache TTL: ${CACHE_TTL.TOTAL_BURNED / 3600000}h`);
+    
+    const balanceWei = await withFailover(() => 
+      verseTokenContract.methods.balanceOf(burnEngineAddress).call()
+    );
     lastKnownBalanceEth = web3.utils.fromWei(balanceWei, "ether");
     console.log(`Initial Burn Engine Balance: ${lastKnownBalanceEth} VERSE`);
     await fetchVerseUsdRate();
 
-    lastProcessedBlock = await web3.eth.getBlockNumber();
+    lastProcessedBlock = await withFailover(() => web3.eth.getBlockNumber());
     console.log(`Starting event monitoring from block: ${lastProcessedBlock}`);
     monitorEvents();
   } catch (e) {
     console.error(`Error during initialization: ${e.message}`);
+    console.log(`Retrying initialization in ${ERROR_RETRY_INTERVAL / 1000}s...`);
+    setTimeout(initialize, ERROR_RETRY_INTERVAL);
   }
 };
 
@@ -162,9 +213,10 @@ const handleTransfer = async (event) => {
   const valueEth = web3.utils.fromWei(valueWei, "ether");
   const formattedMessage = formatAmount(valueEth);
 
-  const burnEngineBalanceWei = await verseTokenContract.methods
-    .balanceOf(burnEngineAddress)
-    .call();
+  const currentVerseContract = new web3.eth.Contract(verseTokenABI, verseTokenAddress);
+  const burnEngineBalanceWei = await withFailover(() =>
+    currentVerseContract.methods.balanceOf(burnEngineAddress).call()
+  );
   lastKnownBalanceEth = web3.utils.fromWei(burnEngineBalanceWei, "ether");
   const formattedBalance = formatAmount(lastKnownBalanceEth);
 
@@ -196,7 +248,7 @@ const handleTokensBurned = async (event) => {
 const monitorEvents = async () => {
   while (true) {
     try {
-      const latestBlock = await web3.eth.getBlockNumber();
+      const latestBlock = await withFailover(() => web3.eth.getBlockNumber());
       const fromBlock =
         lastProcessedBlock > 0 ? lastProcessedBlock + 1 : 18481385;
 
@@ -204,13 +256,16 @@ const monitorEvents = async () => {
         // Pre-fetch USD rate once per polling cycle (not per event)
         await fetchVerseUsdRate();
 
-        const transferEvents = await verseTokenContract.getPastEvents(
-          "Transfer",
-          {
+        // Recreate contracts with current web3 instance after potential failover
+        const currentVerseContract = new web3.eth.Contract(verseTokenABI, verseTokenAddress);
+        const currentBurnContract = new web3.eth.Contract(burnEngineABI, burnEngineAddress);
+
+        const transferEvents = await withFailover(() => 
+          currentVerseContract.getPastEvents("Transfer", {
             fromBlock: fromBlock,
             toBlock: "latest",
             filter: { to: burnEngineAddress },
-          }
+          })
         );
 
         // Process events sequentially to avoid spamming
@@ -218,12 +273,11 @@ const monitorEvents = async () => {
           await handleTransfer(event);
         }
 
-        const tokensBurnedEvents = await burnEngineContract.getPastEvents(
-          "TokensBurned",
-          {
+        const tokensBurnedEvents = await withFailover(() =>
+          currentBurnContract.getPastEvents("TokensBurned", {
             fromBlock: fromBlock,
             toBlock: "latest",
-          }
+          })
         );
 
         for (const event of tokensBurnedEvents) {
@@ -231,13 +285,15 @@ const monitorEvents = async () => {
         }
 
         lastProcessedBlock = latestBlock;
+        console.log(`✅ Processed up to block ${latestBlock}. Next check in ${POLL_INTERVAL / 60000} min.`);
       } else {
-        console.log(`💤 No new events to process. Next check in ${POLL_INTERVAL / 1000} seconds.`);
+        console.log(`💤 No new blocks. Next check in ${POLL_INTERVAL / 60000} min.`);
       }
 
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
     } catch (e) {
-      console.error(`Error in event monitoring: ${e.message}`);
+      console.error(`🚨 Error in event monitoring: ${e.message}`);
+      console.log(`Retrying in ${ERROR_RETRY_INTERVAL / 60000} min...`);
       await new Promise((resolve) => setTimeout(resolve, ERROR_RETRY_INTERVAL));
     }
   }
@@ -485,20 +541,28 @@ bot.onText(/\/burns/, async (msg) => {
 
 bot.onText(/\/enginebalance/, async (msg) => {
   const chatId = msg.chat.id;
-  let response;
-  if (lastKnownBalanceEth > 0) {
-    const formattedBalance = formatAmount(lastKnownBalanceEth);
-    response = `🔥 Current Burn Engine Balance: ${formattedBalance}`;
-  } else {
-    await fetchVerseUsdRate();
-    const balanceWei = await verseTokenContract.methods
-      .balanceOf(burnEngineAddress)
-      .call();
-    const balanceEth = web3.utils.fromWei(balanceWei, "ether");
-    const formattedBalance = formatAmount(balanceEth);
-    response = `🔥 Current Burn Engine Balance: ${formattedBalance}`;
+  try {
+    let response;
+    if (lastKnownBalanceEth > 0) {
+      await fetchVerseUsdRate();
+      const formattedBalance = formatAmount(lastKnownBalanceEth);
+      response = `🔥 Current Burn Engine Balance: ${formattedBalance}`;
+    } else {
+      await fetchVerseUsdRate();
+      const currentVerseContract = new web3.eth.Contract(verseTokenABI, verseTokenAddress);
+      const balanceWei = await withFailover(() =>
+        currentVerseContract.methods.balanceOf(burnEngineAddress).call()
+      );
+      const balanceEth = web3.utils.fromWei(balanceWei, "ether");
+      lastKnownBalanceEth = balanceEth;
+      const formattedBalance = formatAmount(balanceEth);
+      response = `🔥 Current Burn Engine Balance: ${formattedBalance}`;
+    }
+    bot.sendMessage(chatId, response);
+  } catch (e) {
+    console.error(`Error in /enginebalance: ${e.message}`);
+    bot.sendMessage(chatId, "Error fetching balance. Please try again.");
   }
-  bot.sendMessage(chatId, response);
 });
 
 initialize();
