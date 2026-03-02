@@ -7,16 +7,38 @@ import threading
 import time
 
 # Fetching environment variables
-infura_url = os.getenv("INFURA_URL")
 bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
 chat_ids = os.getenv("TELEGRAM_CHAT_IDS").split(",")  # Split the chat IDs into a list
 
 # Check if environment variables are set
-if not infura_url or not bot_token or not chat_ids:
-    raise ValueError("Environment variables for Infura URL, Telegram Bot Token, or Chat IDs are missing")
+if not bot_token or not chat_ids:
+    raise ValueError("Environment variables for Telegram Bot Token or Chat IDs are missing")
 
-# Web3 and Telegram Bot Setup
-web3 = Web3(Web3.HTTPProvider(infura_url))
+# Free public RPC providers (round-robin with failover, no Infura needed)
+RPC_PROVIDERS = [
+    "https://eth.llamarpc.com",
+    "https://rpc.ankr.com/eth",
+    "https://1rpc.io/eth",
+    "https://eth.drpc.org",
+    "https://ethereum-rpc.publicnode.com",
+]
+current_rpc_index = 0
+
+def get_web3():
+    global current_rpc_index
+    for _ in range(len(RPC_PROVIDERS)):
+        provider = RPC_PROVIDERS[current_rpc_index % len(RPC_PROVIDERS)]
+        current_rpc_index += 1
+        try:
+            w3 = Web3(Web3.HTTPProvider(provider, request_kwargs={'timeout': 15}))
+            if w3.is_connected():
+                return w3
+        except Exception:
+            continue
+    raise Exception("All RPC providers failed")
+
+# Web3 Setup (free RPCs)
+web3 = get_web3()
 bot = Bot(token=bot_token)
 # Contract Details
 verse_token_address = "0x249cA82617eC3DfB2589c4c17ab7EC9765350a18"
@@ -32,11 +54,11 @@ burn_engine_contract = web3.eth.contract(address=burn_engine_address, abi=burn_e
 def handle_transfer(event):
     # Fetch the transfer details
     value_wei = event['args']['value']
-    value_eth = web3.fromWei(value_wei, 'ether')
+    value_eth = web3.from_wei(value_wei, 'ether')
 
     # Fetch the Verse Token balance of the Burn Engine Contract
     burn_engine_balance_wei = verse_token_contract.functions.balanceOf(burn_engine_address).call()
-    burn_engine_balance_eth = web3.fromWei(burn_engine_balance_wei, 'ether')
+    burn_engine_balance_eth = web3.from_wei(burn_engine_balance_wei, 'ether')
 
     # Compose and send the message
     message = (
@@ -47,7 +69,7 @@ def handle_transfer(event):
 
 def handle_tokens_burned(event):
     amount_wei = event['args']['amount']
-    amount_eth = web3.fromWei(amount_wei, 'ether')
+    amount_eth = web3.from_wei(amount_wei, 'ether')
     message = f"Tokens Burned: {amount_eth} ETH burned."
     post_to_telegram(message)
 
@@ -60,7 +82,7 @@ def burns_command(update, context):
     response = "Last 5 Burns:\n"
     for event in last_5_burns:
         tx_hash = event['transactionHash'].hex()
-        amount = web3.fromWei(event['args']['amount'], 'ether')
+        amount = web3.from_wei(event['args']['amount'], 'ether')
         response += f"Amount: {amount} ETH, Tx: [Etherscan](https://etherscan.io/tx/{tx_hash})\n"
 
     update.message.reply_text(response, parse_mode='Markdown')
@@ -74,7 +96,7 @@ updater.start_polling()
 def burn_balance_command(update, context):
     # Fetch the current balance
     balance_wei = verse_token_contract.functions.balanceOf(burn_engine_address).call()
-    balance_eth = web3.fromWei(balance_wei, 'ether')
+    balance_eth = web3.from_wei(balance_wei, 'ether')
 
     # Send the response
     response = f"Current Burn Engine Balance: {balance_eth} ETH"
@@ -92,8 +114,8 @@ def monitor_events():
     while True:
         try:
             # Adjust the block range as needed
-            latest_block = web3.eth.blockNumber
-            from_block = max(0, latest_block - 50)  # Last 50 blocks
+            latest_block = web3.eth.block_number
+            from_block = max(0, latest_block - 30)  # Last 30 blocks (~5 min)
 
             # Verse Token Transfer Events
             transfer_filter = verse_token_contract.events.Transfer.createFilter(
@@ -108,12 +130,18 @@ def monitor_events():
             for event in tokens_burned_filter.get_all_entries():
                 handle_tokens_burned(event)
 
-            time.sleep(10)  # Regular polling interval
+            time.sleep(300)  # Poll every 5 minutes (was 10s — way too aggressive)
 
         except Exception as e:
             current_time = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
             print(f"[{current_time}] Error in event monitoring: {e}")
-            time.sleep(60)  # Longer wait after an error
+            # Rotate to next RPC provider on error
+            try:
+                web3 = get_web3()
+                print(f"Switched to new RPC provider")
+            except Exception:
+                print("All RPC providers down, waiting...")
+            time.sleep(600)  # 10 min wait after error (was 60s)
 
 # Start Monitoring in a Separate Thread
 threading.Thread(target=monitor_events).start()
